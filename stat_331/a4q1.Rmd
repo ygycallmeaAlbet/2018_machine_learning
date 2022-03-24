@@ -1,0 +1,151 @@
+---
+title: "a4p1"
+output: pdf_document
+---
+
+\subsection{Part a}
+```{r setup, include=FALSE}
+dataQ1 =matrix(NA, nrow=3, ncol=10)
+dataQ1[1,] =c(100, 95, 125, 105, 100, 90, 135, 120, 85, 101)
+dataQ1[2,] =c(90, 110, 85, 90, 95, 110, 115, 110, 105, 120)
+dataQ1[3,] =c(250, 175, 140, 200, 195, 165, 145, 180, 210, 180)
+rownames(dataQ1) =c("Goose Bar", "$9 Dinner", "Carbwich")
+```
+
+
+```{r, echo = FALSE}
+boxplot(t(dataQ1),xlab='Group Name',ylab='Contribution')
+
+```
+  
+The above graph is the  boxplot of the data for all 3 groups.
+  
+code:  
+boxplot(t(dataQ1),xlab='Group Name',ylab='Contribution')  
+
+
+
+\subsection{Part b}
+
+Based on the boxplot from part (a), the heights of boxes are a bit different, but overall we can call it seems to be similar variation in each treatment group.
+
+\subsection{Part c}
+```{r, echo = FALSE}
+contribution = as.numeric(t(dataQ1))
+treatments = c(rep('Goose Bar',10), rep('$9 Dinner', 10),rep('Carbwich', 10))
+summary( aov(contribution~treatments))
+```  
+code:  
+contribution = as.numeric(t(dataQ1))  
+treatments = c(rep('Goose Bar',10), rep('$9 Dinner', 10),rep('Carbwich', 10))  
+summary( aov(contribution~treatments))  
+
+\subsection{Part d}
+ the p-value is 
+$$
+\begin{array}{rcl}
+3.09*10^{-9}
+\end{array}
+$$  
+code:  
+\\begin{array}{rcl}  
+3.09*10^{-9}  
+\\end{array}  
+
+\subsection{Part e}
+$$
+\begin{array}{rcl}
+f & = & \frac{MS_{TRT}}
+              {MS_{RES}}
+         \sim F_{dfTRT,dfRES}
+\end{array}
+$$  
+the df TRT is 2 and df RES is 27 from ANOVA table in part(c)
+the distribution is   
+$$
+\begin{array}{rcl}
+F_{2,27}
+\end{array}
+$$
+\subsection{Part f}
+Since the p-value from part(d) is really small, we reject the null hypothesis that all three approaches lead to the same contribution amounts.  
+code:  
+\\begin{array}{rcl}  
+f & = & \\frac{MS_{TRT}}  
+              {MS_{RES}}  
+         \\sim F_{dfTRT,dfRES}  
+\\end{array}  
+\\subsection{Part f}  
+\\begin{array}{rcl}  
+F_{2,27}  
+\\end{array}  
+
+
+\subsection{Part g}
+```{r, echo = FALSE}
+mu_hat = mean(dataQ1)
+tau_hat = apply(dataQ1,1,mean)
+sigmasq_hat = 480
+```  
+(i) H0: tu1=tu2  
+p-value is :
+```{r, echo = FALSE}
+a = c(1,-1,0)
+theta = sum(a * tau_hat)
+se_theta = sqrt(sigmasq_hat * sum(a^2)/10)
+tobs = theta / se_theta
+round(2 * pt(abs(tobs), df = 27, lower.tail = FALSE),3)
+
+```  
+code:  
+mu_hat = mean(dataQ1)  
+tau_hat = apply(dataQ1,1,mean)  
+sigmasq_hat = 480  
+a = c(1,-1,0)  
+theta = sum(a * tau_hat)  
+se_theta = sqrt(sigmasq_hat * sum(a^2)/10)  
+tobs = theta / se_theta  
+round(2 * pt(abs(tobs), df = 27, lower.tail = FALSE),3)  
+
+(ii)  H0:tu1=tu3  
+p-value is :
+```{r, echo = FALSE}
+a = c(1,0,-1)
+theta = sum(a * tau_hat)
+se_theta = sqrt(sigmasq_hat * sum(a^2)/10)
+tobs = theta / se_theta
+round(2 * pt(abs(tobs), df = 27, lower.tail = FALSE),3)
+
+```
+code:  
+mu_hat = mean(dataQ1)  
+tau_hat = apply(dataQ1,1,mean)  
+sigmasq_hat = 480  
+a = c(1,0,-1)  
+theta = sum(a * tau_hat)  
+se_theta = sqrt(sigmasq_hat * sum(a^2)/10)  
+tobs = theta / se_theta  
+round(2 * pt(abs(tobs), df = 27, lower.tail = FALSE),3)  
+
+(iii) H0:tu2=tu3  
+p-value is :
+```{r, echo = FALSE}
+a = c(0,1,-1)
+theta = sum(a * tau_hat)
+se_theta = sqrt(sigmasq_hat * sum(a^2)/10)
+tobs = theta / se_theta
+round(2 * pt(abs(tobs), df = 27, lower.tail = FALSE),3)
+
+```
+code:  
+mu_hat = mean(dataQ1)  
+tau_hat = apply(dataQ1,1,mean)  
+sigmasq_hat = 480  
+a = c(0,1-1)  
+theta = sum(a * tau_hat)  
+se_theta = sqrt(sigmasq_hat * sum(a^2)/10)  
+tobs = theta / se_theta  
+round(2 * pt(abs(tobs), df = 27, lower.tail = FALSE),3)  
+
+\subsection{Part h}
+The null hypothesis means the average contribution from Goose bar should be equal to the 2 times of sum of the rest 2 groups.

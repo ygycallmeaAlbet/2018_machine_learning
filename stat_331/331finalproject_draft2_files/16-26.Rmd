@@ -1,0 +1,190 @@
+---
+output:
+  pdf_document: 
+    number_sections: true
+---
+<style type="text/css">
+
+body{ /* Normal  */
+      font-size: 16px;
+  }
+td {  /* Table  */
+  font-size: 8px;
+}
+h1.title {
+  font-size: 38px;
+  color: DarkRed;
+}
+h1 { /* Header 1 */
+  font-size: 28px;
+  color: DarkBlue;
+}
+h2 { /* Header 2 */
+    font-size: 22px;
+  color: DarkBlue;
+}
+h3 { /* Header 3 */
+  font-size: 18px;
+  font-family: "Times New Roman", Times, serif;
+  color: DarkBlue;
+}
+code.r{ /* Code block */
+    font-size: 12px;
+}
+pre { /* Code block - determines code spacing between lines */
+    font-size: 14px;
+}
+</style>
+
+\begin{titlepage}
+
+\center
+\textsc{\LARGE University of Waterloo}\\[5cm]
+{ \huge \bfseries Final Project Report}\\[4cm]
+     \textsc{\Large STAT 331 Fall 2018}\\[3cm]
+     
+\emph{Group 91:}\\[0.5cm]
+Gnegyao \textsc{Yuan}(20613017)\\[0.5cm]
+ \textsc{}()\\
+
+
+\end{titlepage}
+
+\tableofcontents
+
+\newpage
+
+
+\section{Summary}
+The goal of the STAT 331 final project is to explore the relation of healthy male single-fetus birth weight and some explanatory variables. This report will be divided into 4 main sections:  
+Summary, which will cover the main purpose of the report and give a brief explanation of how the project will analyze the data. Two candidate models will be produced in the model selection section by using the pre-fitting data diagnostic and automated model selection. Model diagnostics section will perform an in-depth comparison of the two candidates models by comparing different types of residual plots, leverage and influence measures and cross-validation(rPMSE). In the end, there will be a discussion section basing on the result of the most likely linear model we get from the previous sections to talk about several topics such like: “what is the most important factors associated with/influencing birth weight?’  
+After using serial statistical analysis way that we learned in STAT 331 course, we find that
+
+\section{Model Selection}
+
+\subsection{Brief data overview}
+
+```{r,include=FALSE,echo=FALSE}
+chds_births <- read.csv(file = "chds_births.csv")
+summary(chds_births)
+```
+By view the summary of the data, we notice that there are several illegal data. The domain of "marital"(the mother's marital status) is 1 to 5, but it is clearly showing that there exist 0 in "marital," we replace all the 0 to NA since it is not available data(out of range).  
+For the categorical predictor "meth"(The self-reported ethnicity of the mother) and "feth"(The self-reported ethnicity of the father), all 0 to 5 is Caucasian meaning that they are in the same group, so we replace the 0-5(Caucasian) to 0, 6(Mexican) to 1, 7(African-American) to 2, 8(Asian) to 3, 9(Mixed) to 4, 10(Other) to 5  
+  
+\subsection{Transform categorical predictors}  
+Since all the categorical predictors should not be treated as continuous variables, although they may look like continuous variables (such like 0,1,2,3,4....), we use "one-hot" encoding scheme to make new factors for them. For example, 'med' means the mother's education, whose domain is 0 to 7, where '0' level means 'elementary school' level, level '1' means 'middle school' level, level '2' means 'high school' .... etc, we just transfer numbers to factors with the same name(for example, number 1 to NEW factor '1'),  after successfully transfer all the levels to new factors, dropping all the '0' levels for all categorical predictors by the requirement of one-hot"encoding scheme(we can do that because all predictors have '0' level(meth and feth didn't have, but we already transform them)), and give all the new factors a 0/1 binary variable to show that factor is applied to this data or not.  
+There is a trick in R code: "as.factor" function, it can automatically transfer variables to new factors,  so we applied it on all the categorical predictors(meth, med,feth, fed, marital, smoke, time, number) to factor type instead of continuous variables.
+
+```{r, include=FALSE}
+chds_births$marital[!chds_births$marital %in% c(1:5)] = NA
+chds_births$meth[chds_births$meth %in% c(0,1,2,3,4,5)] = 0
+chds_births$meth[chds_births$meth %in% c(6)] = 1
+chds_births$meth[chds_births$meth %in% c(7)] = 2
+chds_births$meth[chds_births$meth %in% c(8)] = 3
+chds_births$meth[chds_births$meth %in% c(9)] = 4
+chds_births$meth[chds_births$meth %in% c(10)] = 5
+chds_births$feth[chds_births$feth %in% c(0,1,2,3,4,5)] = 0
+chds_births$feth[chds_births$feth %in% c(6)] = 1
+chds_births$feth[chds_births$feth %in% c(7)] = 2
+chds_births$feth[chds_births$feth %in% c(8)] = 3
+chds_births$feth[chds_births$feth %in% c(9)] = 4
+chds_births$feth[chds_births$meth %in% c(10)] = 5
+chds_births$meth <- as.factor(chds_births$meth)
+chds_births$med <- as.factor(chds_births$med)
+chds_births$feth <- as.factor(chds_births$feth)
+chds_births$fed <- as.factor(chds_births$fed)
+chds_births$marital <- as.factor(chds_births$marital)
+chds_births$smoke <- as.factor(chds_births$smoke)
+chds_births$time <- as.factor(chds_births$time)
+chds_births$number <- as.factor(chds_births$number)
+```
+
+
+
+
+\subsection{Drop off NAs and prediction missing data} 
+```{r,include=FALSE}
+library(mice)
+births_mice <- mice(chds_births)
+births_clean <- complete(births_mice)
+```
+  
+It is clear that there is still lots of NA data point in our data frame, there are several methods covered in STAT 331 can produce missing data points. However, we use MICE here.  
+MICE can help us to impute missing values which are drawn from a distribution specifically designed for each missing data points. Don't like replace all NA variables by mean of the data; MICE can also include the 'var' in the data prediction, which can help lessen the bias and make the data close to the original.  
+
+\subsection{Revisiting the category variables} 
+
+```{r,include=FALSE}
+'%!in%' <- function(x,y)!('%in%'(x,y))
+
+levels(births_clean$meth)
+levels(births_clean$meth)[1] <- "Caucasian"
+levels(births_clean$meth)[3] <- "African-American"
+levels(births_clean$meth)[c(2,4,5,6)]<- "others"
+
+levels(births_clean$med)[2] <- "middle-school"
+levels(births_clean$med)[3] <- "high-school"
+levels(births_clean$med)[5] <- "high-school + some college"
+levels(births_clean$med)[6] <- "college graduate"
+levels(births_clean$med)[c(1,4,7,8)]<- "others"
+levels(births_clean$med)
+
+levels(births_clean$feth)
+levels(births_clean$feth)[1] <- "Caucasian"
+levels(births_clean$feth)[3] <- "African-American"
+levels(births_clean$feth)[c(2,4,5,6)]<- "others"
+
+levels(births_clean$fed)[2] <- "middle-school"
+levels(births_clean$fed)[3] <- "high-school"
+levels(births_clean$fed)[5] <- "high-school + some college"
+levels(births_clean$fed)[6] <- "college graduate"
+levels(births_clean$fed)[c(1,4,7,8)]<- "others"
+levels(births_clean$fed)
+
+levels(births_clean$marital)[1] <- "married"
+levels(births_clean$marital)[c(2,3,4,5)] <- "others"
+
+levels(births_clean$smoke)[1] <- "never"
+levels(births_clean$smoke)[2] <- "smokes now"
+levels(births_clean$smoke)[c(3,4)] <- "others"
+levels(births_clean$smoke)
+
+levels(births_clean$time)[1] <- "never smoked"
+levels(births_clean$time)[2] <- "still smokes"
+levels(births_clean$time)[c(3,4,5,6,7,8,9,10)] <- "others"
+levels(births_clean$time)
+
+levels(births_clean$number)[1] <- "never smoked"
+levels(births_clean$number)[2] <- "1-4"
+levels(births_clean$number)[3] <- "5-9"
+levels(births_clean$number)[6] <- "20-29"
+levels(births_clean$number)[c(4,5,7,8,9,10)] <- "others"
+levels(births_clean$number)
+
+summary(births_clean)
+```
+
+
+\subsection{Visually inspect data}
+```{r,echo=FALSE}
+pairs(~wt + gestation + parity + mage + mht + mwt + fage + fht + fwt,cex = .05,  data = chds_births)
+```
+By using pairs plot of all countinuse variables,  
+```{r,echo=FALSE}
+pairs(~wt + gestation + parity,cex = .05,  data = chds_births)
+M0 <- lm(wt ~ 1, data = chds_births)
+Mmax <- lm(wt ~ (.)^2, data = chds_births)
+anyNA(coef(Mmax))
+Mmax2 <- lm(wt ~ (.)^2, data = births_clean)
+beta.max <- coef(Mmax2)
+anyNA(coef(Mmax))
+```
+
+```{r,echo=FALSE}
+
+Mmax <- lm(wt ~ (. -marital -fed -feth -number -time - meth -med)^2 +marital +fed +feth +number +time +meth +med, data = births_clean)
+Mstart <- lm(wt ~ ., data = births_clean)
+beta.max <- coef(Mmax)
+names(beta.max)[is.na(beta.max)]
+anyNA(coef(Mmax))
+```

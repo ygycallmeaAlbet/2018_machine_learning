@@ -1,0 +1,65 @@
+---
+title: "A4q3"
+output: pdf_document
+---
+
+
+\subsection{Part a}
+The randomization performed by randomly assigning treatments to the bolt. Witch means we have ramdon chemical X and chemical y within each bolts.  
+
+\subsection{Part b}
+$$
+\begin{array}{rcl}
+Y_{ijk}= \mu + \alpha_{i} + \lambda_{j} + 	\tau_{ij} + \beta_{k} +  R_{ijk}
+\end{array}
+$$
+where mu is the over all mean  
+alpha is the hemical X effect  
+lambda is the hemical Y effect  
+tau is the interaction effect  
+beta is the Bolt effect  
+R is the random Error  
+where i is 1 to ta, ta = 2(# of A); j is 1 to tb, tb = 2(# of B); k is 1 to r, r = 4(# of blcok)  
+constraints:
+$$
+\begin{array}{rcl}
+\sum_{i = 1}^{ta}\alpha_{i} = 0,  \sum_{j = 1}^{tb}\lambda_{j}=0, \sum_{k = 1}^{r}\beta_{k}=0,\sum_{i}\tau_{ij} = 0,for& \forall i; \sum_{j}\tau_{ij} = 0, for& \forall j
+\end{array}
+$$
+\subsection{Part c}
+
+
+```{r setup, include=FALSE}
+q3block =matrix(NA, nrow=4, ncol=5)
+q3block[1,] =c(73,68,74,71,67)
+q3block[2,] =c(73,67,75,72,70)
+q3block[3,] =c(75,68,78,73,68)
+q3block[4,] =c(73,71,75,75,69)
+rownames(q3block) =c('1','2','3','4')
+mu_11 = mean(q3block[1,])
+mu_12 = mean(q3block[2,])
+mu_21 = mean(q3block[3,])
+mu_22 = mean(q3block[4,])
+baths = c(q3block[1,],q3block[2,],q3block[3,],q3block[4,])
+treatment = rep(c(1:4),each = 5)
+treatment = factor(treatment)
+bolt = rep(c(1:5),4)
+bolt = factor(bolt)
+m1 = aov(baths~treatment+bolt)
+summary(m1)
+sigma_sq = 1.82
+theta_hat = (mu_11 - mu_12) - (mu_21 - mu_22)
+T_obs = abs(theta_hat) / (sqrt(sigma_sq) * sqrt(4/5))
+T_obs
+2*pt(T_obs,df=12,lower.tail = FALSE)
+
+h_x = rep(c('low','high'),each = 10)
+h_y = rep(rep(c('low','high'),each = 5),2)
+m2 = aov(baths~h_x*h_y + bolt)
+summary(m2)
+
+```
+\subsection{Part d}
+(i)     since the p-value 0.121 > 0.05 (from part(c) code), there is no evidence against H0
+
+(ii)    since the p-value 0.6277 > 0.5, there is NO evidence against H0.

@@ -1,0 +1,1113 @@
+---
+output:
+  pdf_document: 
+    number_sections: true
+---
+<style type="text/css">
+
+body{ /* Normal  */
+      font-size: 1px;
+  }
+td {  /* Table  */
+  font-size: 8px;
+}
+h1.title {
+  font-size: 38px;
+  color: DarkRed;
+}
+h1 { /* Header 1 */
+  font-size: 28px;
+  color: DarkBlue;
+}
+h2 { /* Header 2 */
+    font-size: 22px;
+  color: DarkBlue;
+}
+h3 { /* Header 3 */
+  font-size: 18px;
+  font-family: "Times New Roman", Times, serif;
+  color: DarkBlue;
+}
+code.r{ /* Code block */
+    font-size: 12px;
+}
+pre { /* Code block - determines code spacing between lines */
+    font-size: 14px;
+}
+</style>
+
+\begin{titlepage}
+
+\center
+\textsc{\LARGE University of Waterloo}\\[5cm]
+{ \huge \bfseries Final Project Report}\\[4cm]
+     \textsc{\Large STAT 331 Fall 2018}\\[3cm]
+     
+\emph{Group 91:}\\[0.5cm]
+Gengyao \textsc{Yuan}(20613017)\\[0.5cm]
+Shunyu \textsc{Zhao}(20699637)
+
+
+\end{titlepage}
+
+\tableofcontents
+
+\newpage
+```{r setup,include=FALSE}
+library(mice)
+```
+
+\section{Summary}
+The goal of the STAT 331 final project is to explore the relation of healthy male single-fetus birth weight and some explanatory variables. This report will be divided into 4 main sections:  
+\newline
+Summary, which will cover the main purpose of the report and give a brief explanation of how the project will analyze the data. Two candidate models will be produced in the model selection section by using the pre-fitting data diagnostic and automated model selection. Model diagnostics section will perform an in-depth comparison of the two candidates models by comparing different types of residual plots, leverage and influence measures and cross-validation(rPMSE). In the end, there will be a discussion section basing on the result of the most likely linear model we get from the previous sections to talk about several topics such like: what is the most important factors associated with/influencing birth weight? 
+\newline
+After using serial statistical analysis way that we learned in STAT 331 course, we find that the stepwise model is the fittest model in our data. And the 'total number of previous pregnancies,' 'African-American mother,' 'the father's weight,' 'the mother's weight,' 'smoke time' and many interactions between 'the length of gestation' with the previous factors are most important factors relating to the birth weight.
+
+\section{Model Selection}
+
+\subsection{Brief data overview}
+```{r,include=FALSE}
+# data input 
+chds_births <- read.csv(file = "chds_births.csv")
+summary(chds_births) # first look of the data
+```
+By view the summary of the data, we notice that there are several illegal data. The domain of "marital"(the mother's marital status) is 1 to 5, but it is clearly showing that there exist 0 in "marital," we replace all the 0 to NA since it is not available data(out of range).  
+For the categorical predictor "meth"(The self-reported ethnicity of the mother) and "feth"(The self-reported ethnicity of the father), all 0 to 5 is Caucasian meaning that they are in the same group, so we replace the 0-5(Caucasian) to 0, 6(Mexican) to 1, 7(African-American) to 2, 8(Asian) to 3, 9(Mixed) to 4, 10(Other) to 5  
+  
+\subsection{Transform categorical predictors}  
+Since all the categorical predictors should not be treated as continuous variables, although they may look like continuous variables (such like 0,1,2,3,4....), we use "one-hot" encoding scheme to make new factors for them. For example, 'med' means the mother's education, whose domain is 0 to 7, where '0' level means 'elementary school' level, level '1' means 'middle school' level, level '2' means 'high school' .... etc, we just transfer numbers to factors with the same name(for example, number 1 to NEW factor '1'),  after successfully transfer all the levels to new factors, dropping all the '0' levels for all categorical predictors by the requirement of one-hot"encoding scheme(we can do that because all predictors have '0' level(meth and feth didn't have, but we already transform them)), and give all the new factors a 0/1 binary variable to show that factor is applied to this data or not.  
+There is a trick in R code: "as.factor" function, it can automatically transfer variables to new factors,  so we applied it on all the categorical predictors(meth, med,feth, fed, marital, smoke, time, number) to factor type instead of continuous variables.
+
+```{r, include=FALSE}
+
+# standardize the category variable marital
+chds_births$marital[!chds_births$marital %in% c(1:5)] = NA
+
+# standardize the category variable meth
+chds_births$meth[chds_births$meth %in% c(0,1,2,3,4,5)] = 0
+chds_births$meth[chds_births$meth %in% c(6)] = 1
+chds_births$meth[chds_births$meth %in% c(7)] = 2
+chds_births$meth[chds_births$meth %in% c(8)] = 3
+chds_births$meth[chds_births$meth %in% c(9)] = 4
+chds_births$meth[chds_births$meth %in% c(10)] = 5
+
+# standardize the category variable feth
+chds_births$feth[chds_births$feth %in% c(0,1,2,3,4,5)] = 0
+chds_births$feth[chds_births$feth %in% c(6)] = 1
+chds_births$feth[chds_births$feth %in% c(7)] = 2
+chds_births$feth[chds_births$feth %in% c(8)] = 3
+chds_births$feth[chds_births$feth %in% c(9)] = 4
+chds_births$feth[chds_births$feth %in% c(10)] = 5
+
+# change all category variables to factor instead of continues variables
+chds_births$meth <- as.factor(chds_births$meth)
+chds_births$med <- as.factor(chds_births$med)
+chds_births$feth <- as.factor(chds_births$feth)
+chds_births$fed <- as.factor(chds_births$fed)
+chds_births$marital <- as.factor(chds_births$marital)
+chds_births$smoke <- as.factor(chds_births$smoke)
+chds_births$time <- as.factor(chds_births$time)
+chds_births$number <- as.factor(chds_births$number)
+```
+\subsection{Drop off NAs and prediction missing data} 
+
+From the summary report in the previous section, there are lots of NA data points in our data frame. Several methods have been covered in STAT 331 to produce missing data points. However, we use MICE here.  
+MICE can help us to impute missing values which are drawn from a distribution specifically designed for each missing data points. Don't like replace all NA variables by mean of the data; MICE can also include the 'var' in the data prediction, which can help lessen the bias and make the data close to the original.  
+Since MCIE is 'prediction' function, thus every time we run this may cause different results, to avoid this, we always set the seed as 1. And to get a closer result similar to the original data, we set the method type of MICE to 'sample,' which means sample any Random sample from observed values.
+```{r,include=FALSE}
+# remove the NA by mice which method is sample
+births_mice <- mice(chds_births, method = "sample", seed = 1)
+births_clean <- complete(births_mice)
+```
+```{r,include=FALSE}
+anyNA(births_clean) #check the NA after removement
+```
+The result of anyNA is FALSE shows there is no more NA value in our births_mice data frame.  
+Since there is no +-INF's data basing on our summary, all the data in data frame now is available and meaningful.  
+\subsection{Revisiting the category variables}  
+```{r,include=FALSE}
+ # since we operate by levels of the factor, for 
+ # factor '0' it will be position '1' in levels
+
+# category variable: meth
+levels(births_clean$meth)
+levels(births_clean$meth)[1] <- "Caucasian"
+levels(births_clean$meth)[3] <- "African-American"
+levels(births_clean$meth)[c(2,4,5,6)]<- "others"
+
+# category variable: med
+levels(births_clean$med)[2] <- "middle-school"
+levels(births_clean$med)[3] <- "high-school"
+levels(births_clean$med)[5] <- "high-school + some college"
+levels(births_clean$med)[6] <- "college graduate"
+levels(births_clean$med)[c(1,4,7,8)]<- "others"
+
+# category variable: feth
+levels(births_clean$feth)
+levels(births_clean$feth)[1] <- "Caucasian"
+levels(births_clean$feth)[3] <- "African-American"
+levels(births_clean$feth)[c(2,4,5,6)]<- "others"
+
+# category variable: fed
+levels(births_clean$fed)[2] <- "middle-school"
+levels(births_clean$fed)[3] <- "high-school"
+levels(births_clean$fed)[5] <- "high-school + some college"
+levels(births_clean$fed)[6] <- "college graduate"
+levels(births_clean$fed)[c(1,4,7,8)]<- "others"
+
+# category variable: marital
+levels(births_clean$marital)[1] <- "married"
+levels(births_clean$marital)[c(2,3,4,5)] <- "others"
+
+# delete smoke 
+births_clean$smoke = NULL
+
+# category variable: time
+levels(births_clean$time)[1] <- "never smoked"
+levels(births_clean$time)[2] <- "still smokes"
+levels(births_clean$time)[c(3,4,5,6,7,8,9,10)] <- "others"
+
+# category variable: number
+levels(births_clean$number)[1] <- "never smoked"
+levels(births_clean$number)[2] <- "1-4"
+levels(births_clean$number)[3] <- "5-9"
+levels(births_clean$number)[6] <- "20-29"
+levels(births_clean$number)[c(4,5,7,8,9,10)] <- "others"
+
+#summary of new data
+summary(births_clean)
+```
+After predicting the missing NA data points, it is necessary to revisit categorial variables and factorize the levels of categorical variables into meaningful names; this can be helpful when dueling with interpretation effect of the model.  
+We also shrink the number of levels for some factors because those levels are significant minorities:  
+meth & feth: keep 0 as Caucasian, 2 as African-American, shrink all other to other(this change based on the previous shrunk result.)
+med & fed:  keep 1 as middle school, 2 as high school, 3 as high school+trade school, 5 as a college graduate, shrink all other to other
+marital: keep 1 as married, shrink all the others to other
+time: keep 0 as never smoke, 1 as still smokes, shrink all the others to other
+number: keep 0 as never smoked, 1 as (smoke) 1-4 (per day), 2 as 5-9,5 as 20-29, shrink all the others to othera
+
+During we shrinking the varibles, we find that the 'smoke' factor should be exaclty same as the 'time smoke' factor, so we just delete the factor'smoke'
+
+\subsection{visually inspect data}
+By drawing out the pairs plot of the original data, we can have a basic visually inspect to estimation is there is a linear relationship between the variables.  
+```{r,echo=FALSE}
+# pairplot for continues data
+pairs(~wt + gestation + parity + mage + mht + mwt + fage + fht + fwt,cex = .05,  data = chds_births)
+```
+  
+As the reason that we only what to find out if there are linear relationships, we only include 'continuous varibles'(basing on the data definition of the project question) into our graph. The result shows that all the 'continuous varibles' continuously somehow so we don't need to treat any of them as categorical.  
+Since there are too many variables, we pike up some significant variables that may have a linear relationship to the next plot, to have an explicit graph.  
+```{r,echo=FALSE}
+pairs(~wt + gestation + mage + mwt + fage + fwt,cex = .05,  data = chds_births) # detailed pairplots
+```
+  
+The only clear linear relationship is between wt and gestation. All the other variables should be further discussed. 
+
+\subsection{Prefitting Data Diagnostic}
+
+By the pairplots, we assume that the birth weight relates to the length of gestation period, mother's age,father's age, mother' weight and father's weight in the continues variables part. Considering the correlate between mother's age and father's age, we finally decide to drop the variable father's age in our pre-fitting model.
+```{r,echo=F}
+Mpre <- lm(formula = wt ~ gestation + mage + fwt + mwt, 
+            data = births_clean)
+Mpre$call
+```
+
+\subsection{Automated Model Selection}  
+### min & max model set up
+It is necessary to set up a minimum model and maximum model before using the automatic selections. Firstly, we set up the M0 as min with only interaction and Mmax as the maximum that all variables have interactions with each other.
+```{r,include= FALSE}
+M0 <- lm(wt ~ 1, data = births_clean) # initial model
+Mmax <- lm(wt ~ (.)^2 , data = births_clean) # full model
+Mstart <- lm(wt ~ ., data = births_clean) #start model
+
+# detect coefficients which are NAs
+beta.max <- coef(Mmax)
+names(beta.max)[is.na(beta.max)]
+anyNA(coef(Mmax))
+```
+Since the NA chart shows it is obviose most of the coeficients have NA interactions with marital, fed, feth, number, time,  meth, med, thus we delete all the interaction with them in our max in order to have a smaller model. We don't add any quadratic terms because basing on the previous pairs plot, there is no graph seems have quadratic relationship.
+
+```{r, echo= F}
+Mmax <- lm(wt ~ (. -marital -fed -feth -number -time - meth -med)^2 
+           +marital + fed +feth +number +time + meth +med , data = births_clean) # Revised max model
+Mstart <- lm(wt ~ ., data = births_clean) #start model
+anyNA(coef(Mmax)) # detect coefficients which are NAs
+```
+And then, we check the coeffient of max model. The output of anyNA is FALSE. It shows the Mmax is the minimum model which including as many possible interactions can but can also avoid all NA here.
+
+### display covariates in each model
+```{r,include=FALSE}
+# Forward selection
+invisible(Mfwd <- step(object = M0,
+               scope = list(lower = M0, upper = Mmax),
+               direction = "forward", trace = FALSE))
+```
+
+```{r,include=FALSE}
+# Backward elimination selection
+Mback <- step(object = Mmax, 
+              scope = list(lower = M0, upper = Mmax),
+              direction = "backward", trace = FALSE)
+```
+
+```{r,include=FALSE}
+# Stepwise selection
+Mstep <- step(object = Mstart,
+              scope = list(lower = M0, upper = Mmax),
+              direction = "both", trace = FALSE)
+```
+
+```{r,echo=FALSE}
+c(fwd = length(coef(Mfwd)), back = length(coef(Mback)), step = length(coef(Mstep)))
+Mfwd$call
+Mback$call
+Mstep$call
+```
+The first line of output is the number of parameters for the three models.
+Parameter for every models are showing after that, following the order: forward selection, backward elimination, and stepwise selection.
+
+## qqplot for residual distribution
+```{r,echo=FALSE}
+par(mfrow=c(2,4))
+plot(fitted(Mfwd), residuals(Mfwd), main="forward", cex = .2)
+plot(fitted(Mback), residuals(Mback), main="backward", cex = .2)
+plot(fitted(Mstep), residuals(Mstep), main="stepwise", cex =.2)
+plot(fitted(Mpre), residuals(Mpre), main="pre-fitting", cex =.2)
+qqnorm(residuals(Mfwd), main="forward")
+qqnorm(residuals(Mback), main="backward")
+qqnorm(residuals(Mstep), main="stepwise")
+qqnorm(residuals(Mpre), main="pre-fitting")
+```
+From the Residual vs Fitted plot, it is clearly showing that points are randomly distributed around the 0 line. And the points in QQ-plot almost line on the diagonal line. All the four graphs prove that the residual distribution follow normal distribution. Therefore, all the models are reasonable to be the candidate model, and then we want to discuss these 4 model specifically.
+
+
+### Press, AIC, $R^2$ and adjusted $R^2$
+```{r,echo=FALSE}
+M1 <- Mfwd
+M2 <- Mback
+M3 <- Mstep
+M4 <- Mpre
+Mnames <- expression(M[FWD], M[BACK], M[STEP],M[PRE])
+
+# press for 3 automated models
+press1 <- resid(M1)/(1-hatvalues(M1))
+press2 <- resid(M2)/(1-hatvalues(M2))
+press3 <- resid(M3)/(1-hatvalues(M3))
+press4 <- resid(M4)/(1-hatvalues(M4))
+PRESS = c(sum(press1^2), sum(press2^2), sum(press3^2),sum(press4^2))
+
+# R^2 for 3 automated models
+r_square1 <- summary(M1)$r.squared
+r_square2 <- summary(M2)$r.squared
+r_square3 <- summary(M3)$r.squared
+r_square4 <- summary(M4)$r.squared
+R_Squared <- c(r_square1,r_square2,r_square3,r_square4)
+
+# Adjusted R^2 for 3 automated models
+r_adj_square1 <- summary(M1)$adj.r.squared
+r_adj_square2 <- summary(M2)$adj.r.squared
+r_adj_square3 <- summary(M3)$adj.r.squared
+r_adj_square4 <- summary(M4)$adj.r.squared
+R_adj_Squared <- c(r_adj_square1,r_adj_square2,r_adj_square3,r_adj_square4)
+
+# AIC for 3 automated models
+AIC1 <- AIC(M1)
+AIC2 <- AIC(M2)
+AIC3 <- AIC(M3)
+AIC4 <- AIC(M4)
+AIC = c(AIC1,AIC2,AIC3,AIC4)
+
+# display results
+disp <- rbind(AIC,PRESS,R_Squared,R_adj_Squared)
+colnames(disp) <- Mnames
+disp
+
+#plot PRESS statistics
+boxplot(x = list(abs(press1),abs(press2),abs(press3),abs(press4)), names = Mnames,
+        ylab = expression("|", PRESS[i], "|"),col = c("yellow","orange","violet","red"))
+              
+              
+```
+
+Since the press statics equal to the following equation
+$$
+PRESS_{i} = y_{i} - y_{i} = e_{i} / 1 - h_{i} 
+$$
+The 'e' here is the residual error, which means the sum of i PRESSi is the total residual error of the model. Thus the model with lest PRESS is the best model.  
+Akaike Information Criterion(AIC) equal to
+$$
+AIC = n(1+log(e^{'}e/n) + log(2pi))+2(p+1)
+$$  
+The less AIC means better model with less error because the AIC has the same monotony with 'e'. However, by the defination of residual error, larger R^2 and adjested R^2 are better.In AIC and PRESS, backward elimination model and stepwise selection model are similar, but in R^2 and adjested R^2 parts, backward elimination model is better. 
+Therefore, we choose backward elimination model and stepwise selection model as our 2 candidate model.
+
+
+\section{Model Diagnostics}
+Our candidate models are  backward elimination model and stepwise selection model. In this section, we will discuss the different residual plots, leverage and influence measure, outlier and cross-validation in order to find the better model in two candidates.
+
+```{r,echo=FALSE}
+Model1 <- Mback
+Model2 <- Mstep
+
+h1 <- hatvalues(Model1) # hat matrix for model1 
+h2 <- hatvalues(Model2) # hat matrix for model2 
+
+y1.hat <- predict(Model1) # predicted values for model1 
+y2.hat <- predict(Model2) # predicted values for model2
+```
+
+
+## Residuals, Studentlized Residuals and Standlized Residuals plots
+```{r,echo=FALSE}
+Re1 <- residuals(Model1) # Residual for model1
+Re2 <- residuals(Model2) # Residual for model2
+
+StanRe1 <- Re1/sigma(Model1) # Standard Residual for model1
+StanRe2 <- Re2/sigma(Model2) # Standard Residual for model2
+
+StudRe1 <- StanRe1 / sqrt(1-hatvalues(Model1)) # Studentized Residual for model1
+StudRe2 <- StanRe2 / sqrt(1-hatvalues(Model2)) # Studentized Residual for model2
+
+
+par(mfrow=c(3,2))
+## Residual plots
+plot(predict(Model1), Re1, xlab = "Predict Values",
+     ylab = "Model1 Residuals", cex.axis = .8, cex = .2,
+     abline(h = mean(Re1), col = "red"))
+plot(predict(Model2), Re2, xlab = "Predict Values", 
+     ylab = "Model2 Residuals", cex.axis = .8, cex = .2,
+     abline(h = mean(Re2), col = "red"))
+
+## Standlized residual plots
+plot(predict(Model1), StanRe1, xlab = "Predict Values",
+     ylab = "Model1 Standardized Residuals", cex.axis = .8,
+     cex = .2, abline(h = mean(StanRe1), col = "red"))
+plot(predict(Model2), StanRe2, xlab = "Predict Values", 
+     ylab = "Model2 Standardized Residuals", cex.axis = .8,
+     cex = .2, abline(h = mean(StanRe2), col = "red"))
+
+## Studentlized residuals plots
+plot(predict(Model1), StudRe1, xlab = "Predict Values",
+     ylab = "Model1 Studentlized Residuals", cex.axis = .8,
+     cex = .2, abline(h = mean(StudRe1), col = "red"))
+plot(predict(Model2), StudRe2, xlab = "Predict Values",
+     ylab = "Model2 Studentlized Residuals", cex.axis = .8,
+     cex = .2, abline(h = mean(StudRe2), col = "red"))
+```
+
+First, we compared the different residual plots respectively. From the residuals vs predict values, standardized residuals vs predicts values, and studentized residuals vs predicts values plots, we can figure out that. First of all, their means are 0. What is more, they do not have any linear trends so they are independent. Also, generally, they all have constant variances because the error variances do not change a lot (no increasing and decreasing trends).
+
+## Comparison of different residual plots
+```{r,echo=FALSE}
+press_model1 <- Re1/(1 - hatvalues(Model1)) #press for model1
+press_model2 <- Re2/(1 - hatvalues(Model2)) #press for model2
+
+dfts1 <- dffits(Model1) #DFFITS for model1
+dfts2 <- dffits(Model2) #DFFITS for model2
+
+# standlize each of these
+p1 <- length(coef(Model1))
+n1 <- nobs(Model1)
+hbar1 <- p1/n1
+StudRe1.stan <- StudRe1 * sqrt(1-hbar1)
+press_model1.stan <- press_model1*(1-hbar1)/sigma(Model1)
+dfts1.stan <- dfts1*(1-hbar1)/sqrt(hbar1)
+
+par(mfrow = c(2,4), mar = c(4,4,.1,.1)) # decide the large of plots
+
+# plots all predicts vs different residuals
+plot(predict(Model1), rep(0, length(y1.hat)),
+     type = "n",
+     ylim = range(StanRe1,StudRe1.stan,dfts1.stan,press_model1.stan),
+     xlab = "Predict Values", 
+     ylab = "Model1 Residuals", 
+     cex.axis = .8)
+segments(x0 = h1,
+        y0 = pmin(StanRe1, StudRe1.stan, press_model1.stan, dfts1.stan),
+        y1 = pmax(StanRe1, StudRe1.stan, press_model1.stan, dfts1.stan),
+        lty = 2)
+points(predict(Model1), StanRe1, pch = 21, bg = "violet", cex = .8) # standardized residual 
+points(predict(Model1), StudRe1.stan, pch = 21, bg = "green", cex = .8) # studentlized residual
+points(predict(Model1), press_model1.stan, pch = 21, bg = "blue", cex = .8) # press residual
+points(predict(Model1), dfts1.stan, pch = 21, bg = "red", cex = .8) # dffit
+abline(h = 0, col = "grey60", lty =2) #horizontal line
+
+## model2
+# standlize each of these
+p2 <- length(coef(Model2))
+n2 <- nobs(Model2)
+hbar2 <- p2/n2
+StudRe2.stan <- StudRe2 * sqrt(1-hbar2)
+press_model2.stan <- press_model2*(1-hbar2)/sigma(Model2)
+dfts2.stan <- dfts2*(1-hbar2)/sqrt(hbar2)
+
+# plots all predicts vs different residuals
+plot(predict(Model2), rep(0, length(y2.hat)),
+     type = "n",
+     ylim = range(StanRe2,StudRe2.stan,dfts2.stan,press_model2.stan),
+     xlab = "Predict Values", 
+     ylab = "Model2 Residuals", 
+     cex.axis = .8)
+segments(x0 = h2,
+        y0 = pmin(StanRe2, StudRe2.stan, press_model2.stan, dfts2.stan),
+        y1 = pmax(StanRe2, StudRe2.stan, press_model2.stan, dfts2.stan),
+        lty = 2)
+points(predict(Model2), StanRe2, pch = 21, bg = "violet", cex = .8) # standardized residual 
+points(predict(Model2), StudRe2.stan, pch = 21, bg = "green", cex = .8) # studentlized residual
+points(predict(Model2), press_model2.stan, pch = 21, bg = "blue", cex = .8) # press residual
+points(predict(Model2), dfts2.stan, pch = 21, bg = "red", cex = .8) # dffit
+abline(h = 0, col = "grey60", lty =2) #horizontal line
+
+
+
+# plots Residuals vs Leverages
+# model1
+plot(h1, rep(0, length(y1.hat)), type = "n", cex.axis = .8, 
+     ylim = range(StanRe1, StudRe1.stan, press_model1.stan, dfts1.stan),
+     xlab = "Leverages", ylab = "Model1 Residuals")
+segments(x0 = h1,
+        y0 = pmin(StanRe1, StudRe1.stan, press_model1.stan, dfts1.stan),
+        y1 = pmax(StanRe1, StudRe1.stan, press_model1.stan, dfts1.stan),
+        lty = 2)
+points(h1, StanRe1, pch = 21, bg = "black", cex =.8) # standard residual 
+points(h1, StudRe1.stan, pch = 21, bg = "blue", cex =.8) # studentlized residual
+points(h1,press_model1.stan, pch = 21, bg = "red", cex = .8) # press residual
+points(h1,dfts1.stan, pch = 21, bg = "orange", cex = .8) # dffit
+abline(v = hbar1, col = "grey60", lty = 2)
+abline(h = 0, col = "grey60", lty =2) #horizontal line
+legend("topright",legend = c("Standardized", "Studentized","Press","DFFITS"), pch = 21,
+       pt.bg = c("black", "blue", "red", "orange"),
+       title = "Residual Type:", cex = .4, pt.cex =.4)
+
+# model2
+plot(h2, rep(0, length(y2.hat)), type = "n", cex.axis = .8, 
+     ylim = range(StanRe2, StudRe2.stan, press_model2.stan, dfts2.stan),
+     xlab = "Leverages", ylab = "Model2 Residuals")
+segments(x0 = h2,
+        y0 = pmin(StanRe2, StudRe2.stan, press_model2.stan, dfts2.stan),
+        y1 = pmax(StanRe2, StudRe2.stan, press_model2.stan, dfts2.stan),
+        lty = 2)
+points(h2, StanRe2, pch = 21, bg = "black", cex =.8) # standard residual 
+points(h2, StudRe2.stan, pch = 21, bg = "blue", cex =.8) # studentlized residual
+points(h2,press_model2.stan, pch = 21, bg = "red", cex = .8) # press residual
+points(h2,dfts2.stan, pch = 21, bg = "orange", cex = .8) # dffit
+abline(v = hbar2, col = "grey60", lty = 2)
+abline(h = 0, col = "grey60", lty =2) #horizontal line
+legend("topright",legend = c("Standardized", "Studentized","Press","DFFITS"), pch = 21,
+       pt.bg = c("black", "blue", "red", "orange"),
+       title = "Residual Type:", cex = .4, pt.cex =.4)   
+```
+
+And then, we tried to combine such kinds of residuals in one plot to find the difference between them. In this part, we compared standardized residuals, studentized residuals, press residual and DFFITS. Since they have different scopes, so we make them identical at the average leverage value level hbar = p/n.
+
+## Leverage and influence measures
+```{r,echo=FALSE}
+# compute leverage
+
+h1 <- hatvalues(Model1) # leverage for Model1
+h2 <- hatvalues(Model2) # leverage for Model2
+
+D1 <- cooks.distance(Model1) # cook's distance for Model1
+D2 <- cooks.distance(Model2) # cook's distance for Model2
+
+infl1.ind <- which.max(D1) # top influence point for Model1 
+infl2.ind <- which.max(D2) # top influence point for Model2
+
+lev1.ind <- h1 > 2*hbar1 # leverage which is more than 2x the average in Model 1
+lev2.ind <- h2 > 2*hbar2 # leverage which is more than 2x the average in Model 2
+
+par(mfrow = c(2,2), mar = c(4,4,.1,.1)) # decide the graph
+
+clrs <- rep("black", len = nobs(Model1)) # decide the color of points
+clrs[lev1.ind] <- "blue" # high leverage's color
+clrs[infl1.ind] <-"red" # high influence's color
+cex <- .8
+
+# cook's distance vs leverage plot 
+plot(h1,D1,xlab = "Model1 Leverage", 
+     ylab = "Model1 Cook's Influence Measure",
+     pch = 21, bg = clrs, cex = cex, cex.axis = cex)
+abline(v = 2*hbar1, col = "grey60", lty = 2)
+legend("topleft", legend = c("High Leverage", "High Influence"), 
+       pch = 21, pt.bg = c("blue", "red"),cex = cex, pt.cex = cex)
+
+clrs <- rep("black", len = nobs(Model2))# decide the color of points
+clrs[lev2.ind] <- "blue"# high leverage's color
+clrs[infl2.ind] <-"red"# high influence's color
+cex <- .8
+
+# cook's distance vs leverage plot 
+plot(h2,D2,xlab = "Model2 Leverage", 
+     ylab = "Model2 Cook's Influence Measure", 
+     pch = 21, bg = clrs, cex = cex, cex.axis = cex)
+abline(v = 2*hbar2, col = "grey60", lty = 2)
+legend("topleft", legend = c("High Leverage", "High Influence"), 
+       pch = 21, pt.bg = c("blue", "red"),cex = cex, pt.cex = cex)
+
+```
+
+In order to figure out the overall influence on cook's distance against leverage plots, we saw that in Model2 the high influence is as twice as the high leverage, so maybe Model2 has outliers
+
+## Outlier
+```{r,echo = FALSE}
+plot(predict(Model2), resid(Model2)) # predict vs residual plot
+entry2 <- which.max(abs(resid(Model2))) #find the entry of max absolute residuals
+```
+
+From the outlier plot and the entry of absolute value of Model2 residuals, we found that the outlier is the observation 530, which is line 531 in original chds_birth file. We found that the weight of that baby is only 71, which is very low compared with the mean of baby weight. Therefore, we believe that observation 530 can be determined as an outlier in our model.
+
+## Cross-validation
+```{r, echo=F}
+M1 <- Model1
+M2 <- Model2
+Mnames_new <- expression(M[Candidate1],M[Candidate2])
+# Cross-validation setup
+nreps <- 2e3 # number of replications
+ntot <- nrow(births_clean) # total number of observations
+ntrain <- floor(0.7 * ntot) # size of training set
+ntest <- ntot-ntrain # size of test set
+mspe1 <- rep(NA, nreps) # sum-of-square errors for each CV replication
+mspe2 <- rep(NA, nreps)
+logLambda <- rep(NA, nreps) # log-likelihod ratio statistic for each replication
+for(ii in 1:nreps) {
+  # randomly select training observations
+  train.ind <- sample(ntot, ntrain) # training observations
+  # refit the models on the subset of training data; ?update for details!
+  M1.cv <- update(M1, subset = train.ind)
+  M2.cv <- update(M2, subset = train.ind)
+  # out-of-sample residuals for both models
+  # that is, testing data - predictions with training parameters
+  M1.res <- births_clean$wt[-train.ind] -
+            predict(M1.cv, newdata = births_clean[-train.ind,])
+  M2.res <- births_clean$wt[-train.ind] -
+            predict(M2.cv, newdata = births_clean[-train.ind,])
+  # mean-square prediction errors
+  mspe1[ii] <- mean(M1.res^2)
+  mspe2[ii] <- mean(M2.res^2)
+  # out-of-sample likelihood ratio
+  M1.sigma <- sqrt(sum(resid(M1.cv)^2)/ntrain) # MLE of sigma
+  M2.sigma <- sqrt(sum(resid(M2.cv)^2)/ntrain)
+  # since res = y - pred, dnorm(y, pred, sd) = dnorm(res, 0, sd)
+  logLambda[ii] <- sum(dnorm(M1.res, mean = 0, sd = M1.sigma, log = TRUE))
+  logLambda[ii] <- logLambda[ii] -
+                   sum(dnorm(M2.res, mean = 0, sd = M2.sigma, log = TRUE))
+}
+# plot rMSPE and out-of-sample log
+par(mfrow = c(1,2))
+par(mar = c(4.5, 4.5, .1, .1))
+boxplot(x = list(sqrt(mspe1), sqrt(mspe2)), 
+        names = Mnames_new, cex = .7,
+        ylab = expression(sqrt(MSPE)), col = c("yellow", "orange"))
+hist(logLambda, breaks = 50, freq = FALSE,
+     xlab = expression(Lambda^{test}),
+     main = "", cex = .7)
+abline(v = mean(logLambda), col = "red") # average value
+```
+
+In this part, we compared the boxplots for root mean square prediction error (rPMSE). According to the graph, it is not difficult to distinguish that the Model2 has a better preference in the comparison result, because the box on left-side is much lower than the right-side box. Also, by the out-of-sample likelihood ratio statistic plot, we found that the Model2 is better.
+Overall, we can say that the final model we select is model2, which is stepwise selection model.
+## Parameter estimate, standard error and p-values table for selected model
+![avatar](/Users/denny/Desktop/newtable1.png)
+![avatar](/Users/denny/Desktop/newtable2.png)
+
+
+\section{Discussion}
+\subsection{What are the most important factors associated with/influencing birth weight?}
+
+According to the summary of our selected model- Stepwise Selection Model, the most important factors are the 'total number of previous pregnancies,' 'African-American mother,' 'the father's weight,' 'the mother's weight,' 'smoke time' and many interactions between 'the length of gestation' with the previous factors from the table in 3.6. Simply, it seems like the length of gestation, the number of pregnancies times, ethnicity of mother, mother smoke or not and the weight of parents are the most critical factors.
+
+\subsection{Low birth weight is considered to be 88 ounces or less. Based on this analysis, would you be able to recommend behavioral changes to parents in order to avoid low birthweight? If so, please carefully formulate your recommendation.}
+Yes.
+1. If the mother smokes, she should reduce the cigarates she smokes everyday or even stop smoking before pregnancy, because whether smoking or not is a sianficant factor contribute to the birth weight of the baby.(The p-value is less than 0.05) 
+2. If parents are thin before pregnancy, they should gain weight because both the the father's weight and the mother's weight's p-value are less than 0.05.
+3. From healthy perspective, if parents want a healthy baby, mother's age is important as well. The p-value of mother's age is less than 0.05, which means mother should get baby when she is young.
+\subsection{Are there any coecients with high p-values retained in the final model? If so, why?}
+Yes, the p-value of 'the length of the gestation period' is high, however, its interactions with a total number of previous pregnancies,' 'African-American mother,' 'the father's weight,' and 'the mother's weight,' all has tiny p-values close to 0. This is because 'the length of the gestation period' itself is not important, but its interactions with others are so important for the model.
+
+\subsection{Are there any outlying observations that might be appropriate to remove?}
+
+```{r, echo=F}
+plot(births_clean$wt,residuals(Mstep)) #answer to part4 question
+```
+
+From the outlier plot and definition of outliers, which the points with particular residual means outliers, yes, there are some observations that we need to remove. By the entry of absolute value of selected model residuals we found in 3.4, we found that the outlier is the observation 530, which is line 531 in original chds_birth file. We found that the weight of that baby is only 71, which is very low compared with the mean of baby weight. Therefore, we believe that observation 530 can be determined as an outlier in our model.Therefore, we think this point can be removed
+
+\subsection{Are any of the regression assumptions of the final model violated? If so, which ones?}
+At first we assume ''the length of the gestation period', 'income' and 'the age' and 'height of parents'are important factors, but basing on the too large p-value, we drop them as last.
+
+\subsection{What are the possible deficiencies of the final model?   how do these deficienciesnuance your conclusions/recommendations above?}
+Since there are too many NA data in 'The mother's height' and 'the total number of previous pregnancies'(over 35%), these NA datapoints may cause serious bias on our model. We try to fix these data points by using MICE founction, if the data of 'The mother's height' and 'the total number of previous pregnancies' follow normal distribution(the help distribution used in MICE fouction), our prediction will close to original data, otherwise our model will contain some bias.
+
+\section{Appendix}
+## Loding data
+```{r,  eval = F}
+library(mice)
+# data input
+chds_births <- read.csv(file = "chds_births.csv") 
+summary(chds_births) # first look of the data
+```
+
+## Transform data
+```{r,  eval = F}
+
+# standardize the category variable marital
+chds_births$marital[!chds_births$marital %in% c(1:5)] = NA
+
+# standardize the category variable meth
+chds_births$meth[chds_births$meth %in% c(0,1,2,3,4,5)] = 0 
+chds_births$meth[chds_births$meth %in% c(6)] = 1 
+chds_births$meth[chds_births$meth %in% c(7)] = 2 
+chds_births$meth[chds_births$meth %in% c(8)] = 3 
+chds_births$meth[chds_births$meth %in% c(9)] = 4 
+chds_births$meth[chds_births$meth %in% c(10)] = 5
+
+# standardize the category variable feth
+chds_births$feth[chds_births$feth %in% c(0,1,2,3,4,5)] = 0 
+chds_births$feth[chds_births$feth %in% c(6)] = 1 
+chds_births$feth[chds_births$feth %in% c(7)] = 2 
+chds_births$feth[chds_births$feth %in% c(8)] = 3 
+chds_births$feth[chds_births$feth %in% c(9)] = 4 
+chds_births$feth[chds_births$feth %in% c(10)] = 5
+
+# change all category variables to factor instead of continues variables
+chds_births$meth <- as.factor(chds_births$meth)
+chds_births$med <- as.factor(chds_births$med)
+chds_births$feth <- as.factor(chds_births$feth)
+chds_births$fed <- as.factor(chds_births$fed)
+chds_births$marital <- as.factor(chds_births$marital)
+chds_births$smoke <- as.factor(chds_births$smoke)
+chds_births$time <- as.factor(chds_births$time)
+chds_births$number <- as.factor(chds_births$number)
+```
+
+## Remove NA and merge categories
+```{r,  eval = F}
+
+# remove the NA by mice which method is sample
+births_mice <- mice(chds_births, method = "sample", seed = 1)
+births_clean <- complete(births_mice)
+anyNA(births_clean) #check the NA after removement
+ # since we operate by levels of the factor, for
+ # factor '0' it will be position '1' in levels
+
+# category variable: meth
+levels(births_clean$meth) 
+levels(births_clean$meth)[1] <- "Caucasian" 
+levels(births_clean$meth)[3] <- "African-American" 
+levels(births_clean$meth)[c(2,4,5,6)]<- "others"
+
+# category variable: med
+levels(births_clean$med)[2] <- "middle-school" 
+levels(births_clean$med)[3] <- "high-school" 
+levels(births_clean$med)[5] <- "high-school + some college" 
+levels(births_clean$med)[6] <- "college graduate" 
+levels(births_clean$med)[c(1,4,7,8)]<- "others"
+
+# category variable: feth
+levels(births_clean$feth) 
+levels(births_clean$feth)[1] <- "Caucasian" 
+levels(births_clean$feth)[3] <- "African-American" 
+levels(births_clean$feth)[c(2,4,5,6)]<- "others"
+
+# category variable: fed
+levels(births_clean$fed)[2] <- "middle-school" 
+levels(births_clean$fed)[3] <- "high-school" 
+levels(births_clean$fed)[5] <- "high-school + some college" 
+levels(births_clean$fed)[6] <- "college graduate" 
+levels(births_clean$fed)[c(1,4,7,8)]<- "others"
+
+# category variable: marital
+levels(births_clean$marital)[1] <- "married" 
+levels(births_clean$marital)[c(2,3,4,5)] <- "others"
+
+# delete smoke
+births_clean$smoke = NULL
+
+# category variable: time
+levels(births_clean$time)[1] <- "never smoked" 
+levels(births_clean$time)[2] <- "still smokes" 
+levels(births_clean$time)[c(3,4,5,6,7,8,9,10)] <- "others"
+
+# category variable: number
+levels(births_clean$number)[1] <- "never smoked" 
+levels(births_clean$number)[2] <- "1-4" 
+levels(births_clean$number)[3] <- "5-9" 
+levels(births_clean$number)[6] <- "20-29" 
+levels(births_clean$number)[c(4,5,7,8,9,10)] <- "others"
+
+#summary of new data
+summary(births_clean)
+```
+
+## Model selection and comparison
+```{r, eval=F}
+ # pairplot for continues data
+pairs(~wt + gestation + parity + mage + mht + mwt + fage + fht + fwt,
+      cex = .05, data = chds_births)
+pairs(~wt + gestation + mage + mwt + fage + fwt,cex = .05, 
+      data = chds_births) # detailed pairplots
+
+
+Mpre <- lm(formula = wt ~ gestation + mage + fwt + mwt, 
+            data = births_clean) # pre-fitting model
+Mpre$call
+
+M0 <- lm(wt ~ 1, data = births_clean) # initial model 
+Mmax <- lm(wt ~ (.)^2 , data = births_clean) # full model 
+Mstart <- lm(wt ~ ., data = births_clean) #start model
+
+# detect coefficients which are NAs
+beta.max <- coef(Mmax)
+names(beta.max)[is.na(beta.max)]
+anyNA(coef(Mmax))
+
+# Revised models
+Mmax <- lm(wt ~ (. -marital -fed -feth -number -time - meth -med)^2
+           +marital + fed +feth +number +time + meth +med , 
+           data = births_clean) 
+Mstart <- lm(wt ~ ., data = births_clean) #start model
+anyNA(coef(Mmax)) # detect coefficients which are NAs
+
+# Forward selection
+invisible(Mfwd <- step(object = M0,
+                       scope = list(lower = M0, upper = Mmax),
+                       direction = "forward", trace = FALSE)) 
+
+# Backward elimination selection
+Mback <- step(object = Mmax,
+              scope = list(lower = M0, upper = Mmax),
+              direction = "backward", trace = FALSE) 
+
+# Stepwise selection
+Mstep <- step(object = Mstart,
+              scope = list(lower = M0, upper = Mmax),
+              direction = "both", trace = FALSE)
+
+# show these 3 automated models
+c(fwd = length(coef(Mfwd)), back = length(coef(Mback)), step = length(coef(Mstep)))
+Mfwd$call
+Mback$call
+Mstep$call
+
+# qq-plots comparison of 4 models
+par(mfrow=c(2,4))
+plot(fitted(Mfwd), residuals(Mfwd), main="forward", cex = .2)
+plot(fitted(Mback), residuals(Mback), main="backward", cex = .2)
+plot(fitted(Mstep), residuals(Mstep), main="stepwise", cex =.2)
+plot(fitted(Mpre), residuals(Mpre), main="pre-fitting", cex =.2)
+qqnorm(residuals(Mfwd), main="forward")
+qqnorm(residuals(Mback), main="backward")
+qqnorm(residuals(Mstep), main="stepwise")
+qqnorm(residuals(Mpre), main="pre-fitting")
+```
+
+## PRESS, AIC, $R^2$ and adjusted $R^2$ 
+```{r,eval=F}
+
+M1 <- Mfwd
+M2 <- Mback
+M3 <- Mstep
+M4 <- Mpre
+Mnames <- expression(M[FWD], M[BACK], M[STEP],M[PRE])
+
+# press for 3 automated models
+press1 <- resid(M1)/(1-hatvalues(M1))
+press2 <- resid(M2)/(1-hatvalues(M2))
+press3 <- resid(M3)/(1-hatvalues(M3))
+press4 <- resid(M4)/(1-hatvalues(M4))
+PRESS = c(sum(press1^2), sum(press2^2), sum(press3^2),sum(press4^2))
+
+# R^2 for 3 automated models
+r_square1 <- summary(M1)$r.squared
+r_square2 <- summary(M2)$r.squared
+r_square3 <- summary(M3)$r.squared
+r_square4 <- summary(M4)$r.squared
+R_Squared <- c(r_square1,r_square2,r_square3,r_square4)
+
+# Adjusted R^2 for 3 automated models
+r_adj_square1 <- summary(M1)$adj.r.squared
+r_adj_square2 <- summary(M2)$adj.r.squared
+r_adj_square3 <- summary(M3)$adj.r.squared
+r_adj_square4 <- summary(M4)$adj.r.squared
+R_adj_Squared <- c(r_adj_square1,r_adj_square2,r_adj_square3,r_adj_square4)
+
+# AIC for 3 automated models
+AIC1 <- AIC(M1)
+AIC2 <- AIC(M2)
+AIC3 <- AIC(M3)
+AIC4 <- AIC(M4)
+AIC = c(AIC1,AIC2,AIC3,AIC4)
+# display results
+disp <- rbind(AIC,PRESS,R_Squared,R_adj_Squared)
+colnames(disp) <- Mnames
+disp
+#plot PRESS statistics
+boxplot(x = list(abs(press1),abs(press2),abs(press3),abs(press4)), names = Mnames,
+        ylab = expression("|", PRESS[i], "|"),col = c("yellow","orange","violet","red"))
+```
+
+## Model diagnose
+```{r, eval=F}
+
+Model1 <- Mback
+Model2 <- Mstep
+
+h1 <- hatvalues(Model1) # hat matrix for model1 
+h2 <- hatvalues(Model2) # hat matrix for model2
+
+y1.hat <- predict(Model1) # predicted values for model1 
+y2.hat <- predict(Model2) # predicted values for model2 
+
+Re1 <- residuals(Model1) # Residual for model1
+Re2 <- residuals(Model2) # Residual for model2
+
+StanRe1 <- Re1/sigma(Model1) # Standard Residual for model1 
+StanRe2 <- Re2/sigma(Model2) # Standard Residual for model2
+StudRe1 <- StanRe1 / sqrt(1-hatvalues(Model1)) # Studentized Residual for model1 
+StudRe2 <- StanRe2 / sqrt(1-hatvalues(Model2)) # Studentized Residual for model2
+par(mfrow=c(3,2))
+
+
+## Residual plots
+plot(predict(Model1), Re1, xlab = "Predict Values",
+     ylab = "Model1 Residuals", cex.axis = .8, cex = .2, 
+     abline(h = mean(Re1), col = "red"))
+plot(predict(Model2), Re2, xlab = "Predict Values",
+     ylab = "Model2 Residuals", cex.axis = .8, cex = .2, 
+     abline(h = mean(Re2), col = "red"))
+
+## Standlized residual plots
+plot(predict(Model1), StanRe1, xlab = "Predict Values", 
+     ylab = "Model1 Standardized Residuals", cex.axis = .8, 
+     cex = .2, abline(h = mean(StanRe1), col = "red"))
+plot(predict(Model2), StanRe2, xlab = "Predict Values", 
+     ylab = "Model2 Standardized Residuals", cex.axis = .8,
+     cex = .2, abline(h = mean(StanRe2), col = "red"))
+
+## Studentlized residuals plots
+plot(predict(Model1), StudRe1, xlab = "Predict Values",
+     ylab = "Model1 Studentlized Residuals", cex.axis = .8,
+     cex = .2, abline(h = mean(StudRe1), col = "red"))
+plot(predict(Model2), StudRe2, xlab = "Predict Values",
+     ylab = "Model2 Studentlized Residuals", cex.axis = .8, 
+     cex = .2, abline(h = mean(StudRe2), col = "red"))
+
+press_model1 <- Re1/(1 - hatvalues(Model1)) #press for model1 
+press_model2 <- Re2/(1 - hatvalues(Model2)) #press for model2
+
+dfts1 <- dffits(Model1) #DFFITS for model1
+dfts2 <- dffits(Model2) #DFFITS for model2
+
+# standlize each of these
+p1 <- length(coef(Model1))
+n1 <- nobs(Model1)
+hbar1 <- p1/n1
+StudRe1.stan <- StudRe1 * sqrt(1-hbar1)
+press_model1.stan <- press_model1*(1-hbar1)/sigma(Model1)
+dfts1.stan <- dfts1*(1-hbar1)/sqrt(hbar1)
+
+par(mfrow = c(2,4), mar = c(4,4,.1,.1)) # decide the large of plots
+
+# plots all predicts vs different residuals
+plot(predict(Model1), rep(0, length(y1.hat)), type = "n",
+     ylim = range(StanRe1,StudRe1.stan,dfts1.stan,press_model1.stan),
+     xlab = "Predict Values",
+     ylab = "Model1 Residuals",
+     cex.axis = .8)
+
+segments(x0 = h1,
+         y0 = pmin(StanRe1, StudRe1.stan, press_model1.stan, dfts1.stan),
+         y1 = pmax(StanRe1, StudRe1.stan, press_model1.stan, dfts1.stan), 
+         lty = 2)
+# standardized residuals
+points(predict(Model1), StanRe1, pch = 21, bg = "violet", cex = .8) 
+# studentlized resduals
+points(predict(Model1), StudRe1.stan, pch = 21, bg = "green", cex = .8) 
+# press residuals
+points(predict(Model1), press_model1.stan, pch = 21, bg = "blue", cex = .8)
+# dffit
+points(predict(Model1), dfts1.stan, pch = 21, bg = "red", cex = .8) 
+abline(h = 0, col = "grey60", lty =2) #horizontal line
+
+## model2
+
+# standlize each of these
+p2 <- length(coef(Model2))
+n2 <- nobs(Model2)
+hbar2 <- p2/n2
+StudRe2.stan <- StudRe2 * sqrt(1-hbar2)
+press_model2.stan <- press_model2*(1-hbar2)/sigma(Model2)
+dfts2.stan <- dfts2*(1-hbar2)/sqrt(hbar2)
+
+# plots all predicts vs different residuals
+plot(predict(Model2), rep(0, length(y2.hat)), type = "n",
+     ylim = range(StanRe2,StudRe2.stan,dfts2.stan,press_model2.stan), 
+     xlab = "Predict Values",
+     ylab = "Model2 Residuals",
+     cex.axis = .8)
+segments(x0 = h2,
+         y0 = pmin(StanRe2, StudRe2.stan, press_model2.stan, dfts2.stan),
+         y1 = pmax(StanRe2, StudRe2.stan, press_model2.stan, dfts2.stan),
+         lty = 2)
+
+# standardized residuals
+points(predict(Model2), StanRe2, pch = 21, bg = "violet", cex = .8)
+# studentlized resduals
+points(predict(Model2), StudRe2.stan, pch = 21, bg = "green", cex = .8) 
+# press residuals
+points(predict(Model2), press_model2.stan, pch = 21, bg = "blue", cex = .8)
+# dffit
+points(predict(Model2), dfts2.stan, pch = 21, bg = "red", cex = .8)
+abline(h = 0, col = "grey60", lty =2) #horizontal line
+
+
+# plots Residuals vs Leverages
+# model1
+plot(h1, rep(0, length(y1.hat)), type = "n", cex.axis = .8,
+     ylim = range(StanRe1, StudRe1.stan, press_model1.stan, dfts1.stan),
+     xlab = "Leverages", ylab = "Model1 Residuals")
+segments(x0 = h1,
+         y0 = pmin(StanRe1, StudRe1.stan, press_model1.stan, dfts1.stan), 
+         y1 = pmax(StanRe1, StudRe1.stan, press_model1.stan, dfts1.stan), 
+         lty = 2)
+# standard residual
+points(h1, StanRe1, pch = 21, bg = "black", cex =.8) 
+# studentlized residual
+points(h1, StudRe1.stan, pch = 21, bg = "blue", cex =.8) 
+# press residual
+points(h1,press_model1.stan, pch = 21, bg = "red", cex = .8)
+# dffit
+points(h1,dfts1.stan, pch = 21, bg = "orange", cex = .8) 
+abline(v = hbar1, col = "grey60", lty = 2)
+abline(h = 0, col = "grey60", lty =2) #horizontal line
+legend("topright",legend = c("Standardized", "Studentized","Press","DFFITS"), 
+       pch = 21,
+       pt.bg = c("black", "blue", "red", "orange"),
+       title = "Residual Type:", cex = .4, pt.cex =.4)
+
+# model2
+plot(h2, rep(0, length(y2.hat)), type = "n", cex.axis = .8,
+     ylim = range(StanRe2, StudRe2.stan, press_model2.stan, dfts2.stan),
+     xlab = "Leverages", ylab = "Model2 Residuals") 
+segments(x0 = h2,
+         y0 = pmin(StanRe2, StudRe2.stan, press_model2.stan, dfts2.stan), 
+         y1 = pmax(StanRe2, StudRe2.stan, press_model2.stan, dfts2.stan),
+         lty = 2)
+ # standard residual
+points(h2, StanRe2, pch = 21, bg = "black", cex =.8)
+# studentlized residual
+points(h2, StudRe2.stan, pch = 21, bg = "blue", cex =.8) 
+# press residual 
+points(h2,press_model2.stan, pch = 21, bg = "red", cex = .8)
+# dffit
+points(h2,dfts2.stan, pch = 21, bg = "orange", cex = .8) 
+abline(v = hbar2, col = "grey60", lty = 2)
+abline(h = 0, col = "grey60", lty =2) #horizontal line
+
+legend("topright",legend = c("Standardized", "Studentized","Press","DFFITS"), 
+       pch = 21,
+       pt.bg = c("black", "blue", "red", "orange"),
+       title = "Residual Type:", cex = .4, pt.cex =.4) # compute leverage
+
+h1 <- hatvalues(Model1) # leverage for Model1
+h2 <- hatvalues(Model2) # leverage for Model2
+
+D1 <- cooks.distance(Model1) # cook's distance for Model1 
+D2 <- cooks.distance(Model2) # cook's distance for Model2
+
+infl1.ind <- which.max(D1) # top influence point for Model1 
+infl2.ind <- which.max(D2) # top influence point for Model2
+
+lev1.ind <- h1 > 2*hbar1 # leverage which is more than 2x the average in Model 1 
+lev2.ind <- h2 > 2*hbar2 # leverage which is more than 2x the average in Model 2
+
+par(mfrow = c(2,2), mar = c(4,4,.1,.1)) # decide the graph
+clrs <- rep("black", len = nobs(Model1)) # decide the color of points 
+clrs[lev1.ind] <- "blue" # high leverage's color
+clrs[infl1.ind] <-"red" # high influence's color
+cex <- .8
+
+# cook's distance vs leverage plot
+plot(h1,D1,xlab = "Model1 Leverage",
+     ylab = "Model1 Cook's Influence Measure",
+     pch = 21, bg = clrs, cex = cex, cex.axis = cex)
+abline(v = 2*hbar1, col = "grey60", lty = 2)
+legend("topleft", legend = c("High Leverage", "High Influence"),
+       pch = 21, pt.bg = c("blue", "red"),
+       cex = cex, pt.cex = cex)
+
+clrs <- rep("black", len = nobs(Model2))# decide the color of points
+clrs[lev2.ind] <- "blue"# high leverage's color
+clrs[infl2.ind] <-"red"# high influence's color
+cex <- .8
+
+# cook's distance vs leverage plot
+plot(h2,D2,xlab = "Model2 Leverage",
+     ylab = "Model2 Cook's Influence Measure",
+     pch = 21, bg = clrs, cex = cex, cex.axis = cex)
+abline(v = 2*hbar2, col = "grey60", lty = 2)
+
+legend("topleft", legend = c("High Leverage", "High Influence"),
+       pch = 21, pt.bg = c("blue", "red"),
+       cex = cex, pt.cex = cex)
+plot(predict(Model2), resid(Model2)) # predict vs residual plot
+entry2 <- which.max(abs(resid(Model2))) #find the entry of max absolute residuals
+```
+
+## Cross-validation
+```{r, eval=F}
+
+M1 <- Model1
+M2 <- Model2
+Mnames_new <- expression(M[Candidate1],M[Candidate2])
+
+# Cross-validation setup
+nreps <- 2e3 # number of replications
+ntot <- nrow(births_clean) # total number of observations
+ntrain <- floor(0.7 * ntot) # size of training set
+ntest <- ntot-ntrain # size of test set
+mspe1 <- rep(NA, nreps) # sum-of-square errors for each CV replication
+mspe2 <- rep(NA, nreps)
+logLambda <- rep(NA, nreps) # log-likelihod ratio statistic for each replication
+
+for(ii in 1:nreps) {
+  # randomly select training observations
+  train.ind <- sample(ntot, ntrain) # training observations
+  # refit the models on the subset of training data;
+  M1.cv <- update(M1, subset = train.ind)
+  M2.cv <- update(M2, subset = train.ind)
+# out-of-sample residuals for both models
+# testing data - predictions with training parameters
+  M1.res <- births_clean$wt[-train.ind] -
+    predict(M1.cv, newdata = births_clean[-train.ind,]) 
+  M2.res <- births_clean$wt[-train.ind] -
+    predict(M2.cv, newdata = births_clean[-train.ind,]) 
+
+# mean-square prediction errors
+  mspe1[ii] <- mean(M1.res^2)
+  mspe2[ii] <- mean(M2.res^2)
+
+# out-of-sample likelihood ratio
+  M1.sigma <- sqrt(sum(resid(M1.cv)^2)/ntrain) # MLE of sigma
+  M2.sigma <- sqrt(sum(resid(M2.cv)^2)/ntrain)
+
+# since res = y - pred, dnorm(y, pred, sd) = dnorm(res, 0, sd)
+  logLambda[ii] <- sum(dnorm(M1.res, mean = 0, sd = M1.sigma, log = TRUE))
+  logLambda[ii] <- logLambda[ii] - sum(dnorm(M2.res, mean = 0, sd = M2.sigma, log = TRUE))
+}
+# plot rMSPE and out-of-sample log
+par(mfrow = c(1,2))
+par(mar = c(4.5, 4.5, .1, .1))
+boxplot(x = list(sqrt(mspe1), sqrt(mspe2)),
+        names = Mnames_new, cex = .7,
+        ylab = expression(sqrt(MSPE)), col = c("yellow", "orange"))
+hist(logLambda, breaks = 50, freq = FALSE,
+     xlab = expression(Lambda^{test}),
+     main = "", cex = .7)
+abline(v = mean(logLambda), col = "red") # average value 
+```
+
+## Codes for part4
+```{r,eval=F}
+plot(births_clean$wt,residuals(Mstep)) #answer to part4 question
+```

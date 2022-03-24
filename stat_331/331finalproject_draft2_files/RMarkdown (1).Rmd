@@ -1,0 +1,144 @@
+---
+title: "Markdown"
+author: ''
+output:
+  pdf_document: default
+  html_document: default
+---
+
+
+Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>. This document was produced using R Markdown.
+
+When you click the **Knit** button in RStudio a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+summary(cars)
+```
+
+You can also embed plots, for example:
+
+```{r, echo=FALSE}
+plot(cars)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+In answering assignment questions,  incorporate mathematics, `R code`, and plots as appropriate.  
+
+For example, using `RMarkdown` from `RStudio`, you might have something inline showing like this `qt(0.9, 64)` and evaluated like this `r qt(0.9, 64)`.  
+
+You will also want to include whole chunks of code and output like this:
+
+```{r}
+n <- 40
+x <- runif(n, min=-2, max=2)
+y <- x^2 + rnorm(n, sd=0.2)
+plot(x,y, pch=19, col= adjustcolor("firebrick", alpha.f=0.7))
+```
+
+And then have your discussion appear around the code and the plot it produced.  
+
+Alternatively you might want to just show the code, without evaluating it.
+
+```{r, eval=FALSE}
+n <- 40
+x <- runif(n, min=-2, max=2)
+y <- x^2 + rnorm(n, sd=0.2)
+plot(x,y, pch=19, col= adjustcolor("firebrick", alpha.f=0.7))
+```
+
+Or evaluate it but not show it
+
+```{r, echo=FALSE}
+n <- 40
+x <- runif(n, min=-2, max=2)
+y <- x^2 + rnorm(n, sd=0.2)
+plot(x,y, pch=19, col= adjustcolor("firebrick", alpha.f=0.7))
+```
+
+You might also want to be a bit particular about any figure you produce:
+```{r, echo=TRUE, eval=TRUE, fig.align="center", fig.width=8, fig.height=8}
+n <- 40
+x <- runif(n, min=-2, max=2)
+y <- x^2 + rnorm(n, sd=0.2)
+plot(x,y, pch=19, col= adjustcolor("firebrick", alpha.f=0.7))
+```
+
+
+**Some Math**
+
+It might, or might not, include some mathematics inline like this $\mu({\bf x})$ or this $\frac{\pi}{2}$, using \$ around the texts or, using \$\$ as a separate block like this
+$$
+Y_{new} - \widetilde{\mu}({\bf x}_{new}) \sim N\left(0 ~,~ \sigma^2 \left( 1 + {\bf x}_{new}^T\left( {\bf X}^T{\bf X} \right)^{-1}
+                      {\bf x}_{new} \right) \right).
+$$
+or even a multi-equation block like:
+$$
+\begin{array}{rcl}
+\alpha & = & Pr\left(-a ~\le~ 
+\frac{ Y_{new} - \widetilde{\mu}({\bf x}_{new}) 
+              }
+     {\widetilde{\sigma} \sqrt{ 1 ~+~
+      {\bf x}^T_{new}
+             \left( {\bf X}^T{\bf X} \right)^{-1}
+             {\bf x}_{new}
+             }
+     }
+     \le ~a~ \right) \\
+&& \\
+&=& Pr \left(~ {\bf I}_{new}({\bf x}_{new})
+            \ni Y_{new} 
+        ~\right)
+\end{array}
+$$
+
+You could also have used a different indicator for equations namely "\\[" and "\\]".
+
+Here are a couple of other examples:
+\[
+x_i = 
+\left\{  \begin{array}{lcl}
+          1  & ~~~~~~ & \text{if } i \text{  is odd} \\
+          &&\\
+          0 & & \text{otherwise.}
+          \end{array}
+\right.
+\]
+and
+\[
+\mathbf{X} = 
+\left[ \begin{array}{cc}
+a & b \\
+&\\
+c&d \\
+&\\
+3 & e 
+\end{array}
+\right]
+\]
+Make your answers complete, as if they were a report on your findings.
+
+To include images:
+
+![Moving a plane through 3d](figure.png)
+
+To include a link  
+\color{blue}
+[Chris Jordan runs the numbers](http://www.chrisjordan.com/gallery/rtn2/#tuna) 
+\color{black}
+
+For miscellaneous other info, see 
+\color{blue}
+[RStudio's RMarkdown Basics](http://rmarkdown.rstudio.com/authoring_basics.html)
+\color{black}
+or their 
+\color{blue}
+[cheatsheet](https://www.rstudio.com/wp-content/uploads/2015/02/rmarkdown-cheatsheet.pdf)
+\color{black}
+and 
+\color{blue}
+[reference guide](https://www.rstudio.com/wp-content/uploads/2015/03/rmarkdown-reference.pdf)\color{black}.
+
+
+
+

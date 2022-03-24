@@ -1,0 +1,66 @@
+---
+title: "A4q3"
+output: pdf_document
+---
+
+
+\subsection{Part a}
+$$
+\begin{array}{rcl}
+Y_{ijk}= \mu + \alpha_{i} + \lambda_{j} + 	\tau_{ij}+  R_{ijk}
+\end{array}
+$$
+where mu is the over all mean  
+alpha is the factor A  effect  
+lambda is the factor b  effect  
+tau is the interaction effect
+R is the random Error  
+where i is 1 to ta, ta = 2(# of A); j is 1 to tb, tb = 2(# of B); k is 1 to r, r = 4(# of blcok)  
+constraints:
+$$
+\begin{array}{rcl}
+\sum_{i = 1}^{ta}\alpha_{i} = 0,  \sum_{j = 1}^{tb}\lambda_{j}=0,\sum_{i}\tau_{ij} = 0,for& \forall i; \sum_{j}\tau_{ij} = 0, for& \forall j
+\end{array}
+$$
+\subsection{Part b}
+
+
+\subsection{Part c}
+```{r setup, include=FALSE}
+q2block =matrix(NA, nrow=4, ncol=4)
+q2block[1,] =c(143,141,150,146)
+q2block[2,] =c(152,149,137,143)
+q2block[3,] =c(134,136,132,127)
+q2block[4,] =c(129,127,132,129)
+rownames(q2block) =c('1','2','3','4')
+mu_11 = mean(q2block[1,])
+mu_12 = mean(q2block[2,])
+mu_21 = mean(q2block[3,])
+mu_22 = mean(q2block[4,])
+tube = c(q2block[1,],q2block[2,],q2block[3,],q2block[4,])
+treatment = rep(c(1:4),each = 4)
+treatment = factor(treatment)
+cond = rep(c(1:4),4)
+cond = factor(cond)
+
+m1 = aov(tube~treatment+cond)
+summary(m1)
+sigma_sq = 23.84
+theta_hat = (mu_11 - mu_12) - (mu_21 - mu_22)
+theta_hat
+T_obs = abs(theta_hat) / sqrt(sigma_sq)
+T_obs
+2*pt(T_obs,df=9,lower.tail = FALSE)
+
+
+f_a = rep(c('low','high'),each = 8)
+f_b = rep(rep(c('low','high'),each = 4),2)
+m2 = aov(tube~ f_a*f_b + cond)
+summary(m2)
+```
+\subsection{Part d}
+(i)     since the p-value 0.00179 < 0.05 (from part(c) code), there is STRONG evidence against H0.  
+Whitch means there is no defference among treatments.
+
+(ii)    since the p-value 0.5223 > 0.5, there is NO evidence against H0.
+YES, interaction is significantly defferent from 0(code show below)

@@ -1,0 +1,68 @@
+---
+title: '1'
+output: pdf_document
+---
+
+## Pre-fitting data diagnostic
+```{r}
+library(mice)
+```
+
+```{r setup, include=FALSE}
+chds_births <- read.csv(file = "chds_births.csv")
+```
+
+### Summary of Data
+```{r}
+summary(chds_births)
+```
+
+### Pair plots
+```{r}
+pairs(~wt + gestation + parity + mage + mht + mwt + fage + fht + fwt,cex = .05,  data = chds_births)
+pairs(~wt + gestation + mage + mwt + fage + fwt,cex = .05,  data = chds_births)
+```
+
+### remove NA/Inf
+```{r}
+births_mice <- mice(chds_births)
+births_clean <- complete(births_mice)
+summary(births_clean)
+anyNA(births_clean)
+births_clean
+```
+
+## Automated Model Selection
+
+```{r}
+M0 <- lm(wt ~ 1, data = births_clean)
+Mmax <- lm(wt ~ (.)^2, data = births_clean)
+Mstart <- lm(wt ~ ., data = births_clean)
+```
+
+### Forward Model Selection
+```{r}
+Mfwd <- step(object = M0, # starting point model
+             scope = list(lower = M0, upper = Mmax), # smallest and largest model
+             direction = "forward", trace = FALSE) # trace prints out information
+Mfwd
+```
+
+
+### Backward Model Selection
+```{r}
+Mback <- step(object = Mmax, # starting point model
+              scope = list(lower = M0, upper = Mmax),
+              direction = "backward", trace = FALSE)
+Mback
+```
+
+
+### Stepwise Model Selection
+```{r}
+system.time({
+  Mstep <- step(object = Mstart,
+                scope = list(lower = M0, upper = Mmax),
+                direction = "both", trace = FALSE)
+})
+```

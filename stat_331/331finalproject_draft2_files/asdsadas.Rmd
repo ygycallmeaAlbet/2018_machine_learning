@@ -1,0 +1,87 @@
+---
+title: "Untitled"
+output: word_document
+---
+```{r setup,echo = FALSE}
+library(mice)
+chds_births <- read.csv(file = "chds_births.csv")
+summary(chds_births)
+
+chds_births$marital[!chds_births$marital %in% c(1:5)] = NA
+chds_births$meth[chds_births$meth %in% c(0,1,2,3,4,5)] = 0
+chds_births$meth[chds_births$meth %in% c(6)] = 1
+chds_births$meth[chds_births$meth %in% c(7)] = 2
+chds_births$meth[chds_births$meth %in% c(8)] = 3
+chds_births$meth[chds_births$meth %in% c(9)] = 4
+chds_births$meth[chds_births$meth %in% c(10)] = 5
+chds_births$feth[chds_births$feth %in% c(0,1,2,3,4,5)] = 0
+chds_births$feth[chds_births$feth %in% c(6)] = 1
+chds_births$feth[chds_births$feth %in% c(7)] = 2
+chds_births$feth[chds_births$feth %in% c(8)] = 3
+chds_births$feth[chds_births$feth %in% c(9)] = 4
+chds_births$feth[chds_births$feth %in% c(10)] = 5
+chds_births$meth <- as.factor(chds_births$meth)
+chds_births$med <- as.factor(chds_births$med)
+chds_births$feth <- as.factor(chds_births$feth)
+chds_births$fed <- as.factor(chds_births$fed)
+chds_births$marital <- as.factor(chds_births$marital)
+chds_births$smoke <- as.factor(chds_births$smoke)
+chds_births$time <- as.factor(chds_births$time)
+chds_births$number <- as.factor(chds_births$number)
+
+births_mice <- mice(chds_births, method = "sample", seed = 1)
+births_clean <- complete(births_mice)
+
+
+levels(births_clean$meth)
+levels(births_clean$meth)[1] <- "Caucasian"
+levels(births_clean$meth)[3] <- "African-American"
+levels(births_clean$meth)[c(2,4,5,6)]<- "others"
+
+levels(births_clean$med)[2] <- "middle-school"
+levels(births_clean$med)[3] <- "high-school"
+levels(births_clean$med)[5] <- "high-school + some college"
+levels(births_clean$med)[6] <- "college graduate"
+levels(births_clean$med)[c(1,4,7,8)]<- "others"
+
+
+levels(births_clean$feth)
+levels(births_clean$feth)[1] <- "Caucasian"
+levels(births_clean$feth)[3] <- "African-American"
+levels(births_clean$feth)[c(2,4,5,6)]<- "others"
+
+levels(births_clean$fed)[2] <- "middle-school"
+levels(births_clean$fed)[3] <- "high-school"
+levels(births_clean$fed)[5] <- "high-school + some college"
+levels(births_clean$fed)[6] <- "college graduate"
+levels(births_clean$fed)[c(1,4,7,8)]<- "others"
+
+
+levels(births_clean$marital)[1] <- "married"
+levels(births_clean$marital)[c(2,3,4,5)] <- "others"
+
+births_clean$smoke = NULL
+
+levels(births_clean$time)[1] <- "never smoked"
+levels(births_clean$time)[2] <- "still smokes"
+levels(births_clean$time)[c(3,4,5,6,7,8,9,10)] <- "others"
+
+
+levels(births_clean$number)[1] <- "never smoked"
+levels(births_clean$number)[2] <- "1-4"
+levels(births_clean$number)[3] <- "5-9"
+levels(births_clean$number)[6] <- "20-29"
+levels(births_clean$number)[c(4,5,7,8,9,10)] <- "others"
+
+
+M0 <- lm(wt ~ 1, data = births_clean)
+Mmax <- lm(wt ~ (. -marital -fed -feth -number -time - meth -med)^2 
+           +marital + fed +feth +number +time + meth +med , data = births_clean)
+Mstart <- lm(wt ~ ., data = births_clean)
+anyNA(coef(Mmax))
+M1 <- step(object = Mstart,
+              scope = list(lower = M0, upper = Mmax),
+              direction = "both", trace = FALSE)
+
+summary(M1)
+```

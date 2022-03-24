@@ -1,0 +1,276 @@
+†---
+title: "STAT331 Project"
+author: "Sijie Jin, Raymond Tan, Yinong Wang"
+date: '2018-11-14'
+output: 
+  pdf_document:
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Summary
+
+# Model Selection
+
+## Pre-fitting data diagnostic
+
+```{r}
+library(mice)
+
+# read in data
+births.raw = read.csv("chds_births.csv")
+```
+
+### Summary of Data
+
+```{r}
+head(births.raw, 10)
+summary(births.raw)
+
+# Validating marital
+births.raw$marital[!births.raw$marital %in% c(1:5)] = NA
+```
+
+### Categorize data
+
+```{r}
+categoricals = c('meth', 'feth', 'med', 'fed', 'marital', 'income', 'smoke', 'time', 'number')#, 'parity', 'mht', 'fht')
+
+# Categorize meth
+meth.categories = c(rep('Caucasian', 6), 'Mexican', 'African-American', 'Asian', 'Mixed', 'Other')
+for (i in 1:length(meth.categories)) {
+  births.raw$meth[births.raw$meth == i-1] = meth.categories[i]
+  births.raw$feth[births.raw$feth == i-1] = meth.categories[i]
+}
+births.raw$meth = as.factor(births.raw$meth)
+births.raw$feth = as.factor(births.raw$feth)
+
+# Categorize med
+med.categories = c('elementary school', 'middle school', 'high school', 'high school + trade school', 'high school + some college', 'college graduate', 'trade school', 'high school unclear')
+for (i in 1:length(med.categories)) {
+  births.raw$med[births.raw$med == i-1] = med.categories[i]
+  births.raw$fed[births.raw$fed == i-1] = med.categories[i]
+}
+births.raw$med = as.factor(births.raw$med)
+births.raw$fed = as.factor(births.raw$fed)
+
+# Categorize marital
+marital.categories = c('married', 'legally separated', 'divorced', 'widowed', 'never married')
+for (i in 1:length(marital.categories)) {
+  births.raw$marital[births.raw$marital == i] = marital.categories[i]
+}
+births.raw$marital = as.factor(births.raw$marital)
+
+# Categorize income
+income.categories = c('under 2500', '2500-4999', '5000-7499', '7500-9999', '10000-12499', '12500-14999', '15000-17499', '17500-19999', '20000-22499', 'over 22500')
+for (i in 1:length(income.categories)) {
+  births.raw$income[births.raw$income == i-1] = income.categories[i]
+}
+births.raw$income = as.factor(births.raw$income)
+
+# Categorize smoke
+smoke.categories = c('never', 'smokes now', 'until pregnancy', 'used to, not anymore')
+for (i in 1:length(smoke.categories)) {
+  births.raw$smoke[births.raw$smoke == i-1] = smoke.categories[i]
+}
+births.raw$smoke = as.factor(births.raw$smoke)
+
+# Categorize time
+time.categories = c('never smoked', 'still smokes', 'during pregnancy', 'less than a year', '1-2 years', '2-3 years', '3-4 years', '5-9 years', 'more than 10 years', 'quit but don’t know when')
+for (i in 1:length(time.categories)) {
+  births.raw$time[births.raw$time == i-1] = time.categories[i]
+}
+births.raw$time = as.factor(births.raw$time)
+
+# Categorize number
+number.categories = c('never smoked', '1-4', '5-9', '10-14', '15-19', '20-29', '30-39', '40-60', 'more than 60', 'smoked but don’t know how much')
+for (i in 1:length(number.categories)) {
+  births.raw$number[births.raw$number == i-1] = number.categories[i]
+}
+births.raw$number = as.factor(births.raw$number)
+
+births.raw
+```
+
+### Pair plots
+
+```{r}
+births.raw.cont = births.raw[ , ! names(births.raw) %in% categoricals]
+summary(births.raw.cont)
+pairs(births.raw.cont, cex = 0.2)
+```
+
+### NA's and $\pm$Inf's
+
+```{r}
+proportion <- sapply(births.raw, function(x) { sum(is.na(x))*100/nrow(births.raw) })
+proportion
+
+# births.reduced <- births.raw.cont[, !names(births.raw) %in% c('fht', 'fwt')]
+
+births.mice <- mice(births.raw, method = "cart", seed = 1)
+births.clean <- complete(births.mice)
+summary(births.clean)
+anyNA(births.clean)
+```
+
+## Automated Model Selection
+
+```{r}
+M0 <- lm(wt ~ 1, data = births.clean) # initial model
+Mfull <- lm(wt ~ (.)^2, data = births.clean) # full model
+Mstart <- lm(wt ~ ., data = births.clean) # start model
+
+# beta.max <- coef(Mfull)
+# names(beta.max)[is.na(beta.max)]
+```
+
+### Forward Model Selection
+
+```{r}
+# forward
+Mfwd <- step(object = M0,
+             scope = list(lower = M0, upper = Mfull),
+             direction = "forward",
+             trace = FALSE)
+```
+
+### Backward Model Selection
+
+```{r}
+# backward
+Mback <- step(object = Mfull, 
+              scope = list(lower = M0, upper = Mfull),
+              direction = "backward", 
+              trace = FALSE)
+```
+
+### Stepwise Model Selection
+
+```{r}
+# stepward
+Mstep <- step(object = Mstart, 
+              scope = list(lower = M0, upper = Mfull),
+              direction = "both", 
+              trace = FALSE)
+```
+
+## Manual Model Selection
+
+### Cross Validation
+
+```{r}
+
+```
+
+### PRESS Statistics
+
+```{r}
+#Press Statistic
+calPress <- function(M){
+  press <- resid(M)/(1-hatvalues(M))
+  return(press)
+}
+
+press1 <- calPress(M1);
+press2 <- calPress(M2);
+```
+
+
+
+### Akaike Information Criterion
+```{r}
+# AIC Statistic for M1
+AIC1 <- AIC(M1)
+
+#AIC Statistic for M2
+AIC2 <- AIC(M2)
+```
+
+
+
+## Conclusion
+
+# Model Diagnostics
+
+## Linear Model Assumptions
+```{r}
+M1 <- Mfwd
+M2 <- Mstep
+
+summary(M1)
+summary(M2)
+#anova(M1, M2)
+```
+
+```{r}
+cex <- .8
+
+# studendized residual for M1:
+res1 <- residuals(M1) # Hat matrix
+h1 <- hatvalues(M1)
+sigma.hat1 <- sigma(M1)
+res.stu1 <- res1/sqrt(1-h1) # studentized residuals, but on the data scale
+y.hat1 <- predict(M1)
+par(mar = c(4,4,.1,.1))
+plot(y.hat1, res1, pch = 21, bg = "black", cex = cex, cex.axis = cex,
+        xlab = "Predicted Birth Weight in M1",
+        ylab = "Residual Birth Weight in M1",
+        abline(h = mean(res1), col = "blue"))
+points(y.hat1, res.stu1, pch = 21, bg = "red", cex = cex)
+legend(x = "bottomleft", c("Residuals", "Studentized Residuals"),
+pch = 21, pt.bg = c("black", "red"), pt.cex = cex, cex = cex)
+
+
+# studendized residual for M2:
+res2 <- residuals(M2) 
+X2 <- model.matrix(M2) # design matrix
+h2 <- hatvalues(M2)
+sigma.hat2 <- sigma(M2)
+res2 <- residuals(M2)
+res.stu2 <- res2/sqrt(1-h2) # studentized residuals, but on the data scale
+y.hat2 <- predict(M2)
+par(mar = c(4,4,.1,.1))
+plot(y.hat2, res2, pch = 21, bg = "black", cex = cex, cex.axis = cex,
+    xlab = "Predicted Birth Weight in M2", 
+    ylab = "Residual Birth Weight in M2", 
+    abline(h = mean(res2), col = "blue"))
+points(y.hat2, res.stu2, pch = 21, bg = "red", cex = cex)
+legend(x = "bottomleft", c("Residuals", "Studentized Residuals"),
+pch = 21, pt.bg = c("black", "red"), pt.cex = cex, cex = cex)
+
+
+# standardized residual for M1:
+par(mar = c(4,4,.1,.1))
+hist(res1/sigma.hat1, breaks = 50, freq = FALSE, cex.axis = cex,
+xlab = "Standardized Residual for M1", main = "")
+curve(dnorm(x), col = "red", add = TRUE)
+abline(v = mean(res1/sigma.hat1), col = "green")
+
+# standardized residual for M2
+par(mar = c(4,4,.1,.1))
+hist(res2/sigma.hat2, breaks = 50, freq = FALSE, cex.axis = cex,
+xlab = "Standardized Residual for M2", main = "")
+curve(dnorm(x), col = "red", add = TRUE)
+abline(v = mean(res2/sigma.hat2), col = "green")
+
+# QQ-plot for M1
+qqnorm(res.stu1, ylim = c(-40, 60))
+qqline(res.stu1)
+# head(res.stu1)
+
+# QQ-plot for M2
+qqnorm(res.stu2, ylim = c(-40, 60))
+qqline(res.stu2)
+# head(res.stu2)
+```
+
+## Colinearity
+
+## Outliers
+
+# Conclusions
+

@@ -1,0 +1,153 @@
+---
+title: 'STAT 331 Final Project'
+output: pdf_document
+---
+\begin{titlepage}
+
+\center
+\textsc{\LARGE University of Waterloo}\\[1.5cm]
+\HRule \\[0.4cm]
+{ \huge \bfseries Final Project Report}\\[0.4cm]
+\textsc{\Large STAT 331 Fall 2018}\\[0.5cm]
+\HRule \\[1.5cm]
+\textsc{\Large STAT 331 Fall 2018}\\[0.5cm]
+
+
+\end{titlepage}
+
+
+### categorize the data
+```{r}
+library(mice)
+```
+
+```{r setup, include=FALSE}
+chds_births <- read.csv(file = "chds_births.csv")
+chds_births$marital[!chds_births$marital %in% c(1:5)] = NA
+chds_births$meth[chds_births$meth %in% c(0,1,2,3,4,5)] = 0
+chds_births$meth[chds_births$meth %in% c(6)] = 1
+chds_births$meth[chds_births$meth %in% c(7)] = 2
+chds_births$meth[chds_births$meth %in% c(8)] = 3
+chds_births$meth[chds_births$meth %in% c(9)] = 4
+chds_births$meth[chds_births$meth %in% c(10)] = 5
+chds_births$meth <- as.factor(chds_births$meth)
+levels(chds_births$meth)
+chds_births$med <- as.factor(chds_births$med)
+levels(chds_births$med)
+chds_births$feth <- as.factor(chds_births$feth)
+levels(chds_births$feth)
+chds_births$fed <- as.factor(chds_births$fed)
+levels(chds_births$fed)
+chds_births$marital <- as.factor(chds_births$marital)
+levels(chds_births$marital)
+chds_births$income <- as.factor(chds_births$income)
+levels(chds_births$income)
+chds_births$smoke <- as.factor(chds_births$smoke)
+levels(chds_births$smoke)
+chds_births$time <- as.factor(chds_births$time)
+levels(chds_births$time)
+chds_births$number <- as.factor(chds_births$number)
+levels(chds_births$number)
+```
+
+Since the domain of marital is 1 to 5 and all have actull meaning, by quickly view the dataset, we notice that there are some data out of the domain, so we replace such data to NA since they are NA data.
+
+
+### Summary of Data
+```{r}
+summary(chds_births)
+```
+
+### Pair plots
+```{r}
+pairs(~wt + gestation + parity + mage + mht + mwt + fage + fht + fwt,cex = .05,  data = chds_births)
+pairs(~wt + gestation + mage + mwt + fage + fwt,cex = .05,  data = chds_births)
+```
+
+### remove NA/Inf
+```{r}
+births_mice <- mice(chds_births)
+births_clean <- complete(births_mice)
+summary(births_clean)
+anyNA(births_clean)
+births_clean
+```
+MICE helps to impute missing values that are drawn from a distribution specifically designed for each missing data point. Don't like just simply replace all NA variables by mean of the data, MICE can also include the 'var' in the data prediction, which can help lessen the bias and make the data close to the original.
+
+## Automated Model Selection
+Alough MICE is a good enough  way to predition missing data, we still use the orignal data for automated model selection to avoid bias. 
+```{r}
+M0 <- lm(wt ~ 1, data = chds_births)
+Mmax <- lm(wt ~ (.)^2, data = chds_births)
+beta.max <- coef(Mmax)
+names(beta.max)[is.na(beta.max)]
+```
+Since the NA chart shows it is obviose most of the coeficients have NA interactions with marital, thus we delete all the interaction with marital in our max in order to have a smaller model. Add quadratic terms for the continous covariates "gestation, mage, mht,mwt,fht,fwt". We don't add fage as quadratic terms because we show fage has clearly linear relationship with mage above, ignore it for mow for out lightly smaller model.
+
+```{r}
+Mmax <- lm(wt ~ (. -marital)^2 + marital, data = chds_births)
+Mstart <- lm(wt ~ ., data = chds_births)
+anyNA(coef(Mmax))
+```
+From the output of anyNA is FALSE here, it shows the Max can avoid all NA possible, however, there are still some NA data in M0 because it come from the original data from input.
+```{r}
+M0 <- lm(wt ~ 1, data = births_clean)
+Mmax <- lm(wt ~ (. -marital)^2 + marital, data = births_clean)
+Mstart <- lm(wt ~ ., data = births_clean)
+```
+
+
+### Forward Model Selection
+```{r}
+system.time({
+  Mfwd <- step(object = M0, # starting point model
+               scope = list(lower = M0, upper = Mmax), # smallest and largest model
+               direction = "forward", trace = FALSE) # trace prints out information
+})
+Mfwd
+```
+
+
+### Backward Model Selection
+```{r}
+system.time({
+  Mback <- step(object = Mmax, # starting point model
+                scope = list(lower = M0, upper = Mmax),
+                direction = "backward", trace = FALSE)
+})
+Mback
+```
+
+
+### Stepwise Model Selection
+```{r}
+system.time({
+  Mstep <- step(object = Mstart,
+                scope = list(lower = M0, upper = Mmax),
+                direction = "both", trace = FALSE)
+})
+```
+
+```{r}
+c(fwd = length(coef(Mfwd)), back = length(coef(Mback)), step = length(coef(Mstep)))
+```
+
+## qqplot
+```{r}
+par(mfrow=c(2,3))
+plot(fitted(Mfwd), residuals(Mfwd), main="forward")
+plot(fitted(Mback), residuals(Mback), main="backward")
+plot(fitted(Mstep), residuals(Mstep), main="stepwise")
+qqnorm(residuals(Mfwd), main="forward")
+qqnorm(residuals(Mback), main="backward")
+qqnorm(residuals(Mstep), main="stepwise")
+```
+
+## Residual Histogram
+```{r}
+par(mfrow=c(1,3))
+histogram(residuals(Mfwd)/sigma(Mfwd),breaks = 50,freq = FALSE)
+histogram(residuals(Mback)/sigma(Mback),breaks = 50,freq = FALSE)
+histogram(residuals(Mstep)/sigma(Mstep),breaks = 50,freq = FALSE)
+
+```

@@ -1,0 +1,234 @@
+---
+title: '1'
+output: pdf_document
+---
+
+## Pre-fitting data diagnostic
+```{r}
+library(mice)
+```
+
+```{r setup, include=FALSE}
+chds_births <- read.csv(file = "chds_births.csv")
+chds_births$marital[!chds_births$marital %in% c(1:5)] = NA
+chds_births$meth[chds_births$meth %in% c(0,1,2,3,4,5)] = 0
+chds_births$meth[chds_births$meth %in% c(6)] = 1
+chds_births$meth[chds_births$meth %in% c(7)] = 2
+chds_births$meth[chds_births$meth %in% c(8)] = 3
+chds_births$meth[chds_births$meth %in% c(9)] = 4
+chds_births$meth[chds_births$meth %in% c(10)] = 5
+```
+
+Since the domain of marital is 1 to 5 and all have actull meaning, by quickly view the dataset, we notice that there are some data out of the domain, so we replace such data to NA since they are NA data.
+### Summary of Data
+```{r}
+summary(chds_births)
+```
+
+### Pair plots
+```{r}
+pairs(~wt + gestation + parity + mage + mht + mwt + fage + fht + fwt,cex = .05,  data = chds_births)
+pairs(~wt + gestation + mage + mwt + fage + fwt,cex = .05,  data = chds_births)
+```
+
+### remove NA/Inf
+```{r}
+births_mice <- mice(chds_births)
+births_clean <- complete(births_mice)
+summary(births_clean)
+anyNA(births_clean)
+births_clean
+```
+MICE helps to impute missing values that are drawn from a distribution specifically designed for each missing data point. Don't like just simply replace all NA variables by mean of the data, MICE can also include the 'var' in the data prediction, which can help lessen the bias and make the data close to the original.
+
+## Automated Model Selection
+Alough MICE is a good enough  way to predition missing data, we still use the orignal data for automated model selection to avoid bias. 
+```{r}
+M0 <- lm(wt ~ 1, data = chds_births)
+Mmax <- lm(wt ~ (.)^2, data = chds_births)
+beta.max <- coef(Mmax)
+names(beta.max)[is.na(beta.max)]
+```
+Since the NA chart shows it is obviose most of the coeficients have NA interactions with marital, thus we delete all the interaction with marital in our max in order to have a smaller model. Add quadratic terms for the continous covariates "gestation, mage, mht,mwt,fht,fwt". We don't add fage as quadratic terms because we show fage has clearly linear relationship with mage above, ignore it for mow for out lightly smaller model.
+
+```{r}
+Mmax <- lm(wt ~ (. -marital)^2 + marital + I(gestation^2) + I(mage^2)+I(mht^2)+I(mwt^2)+I(fht^2)+I(fwt^2), data = chds_births)
+Mstart <- lm(wt ~ ., data = chds_births)
+anyNA(coef(Mmax))
+```
+From the output of anyNA is FALSE here, it shows the Max can avoid all NA possible, however, there are still some NA data in M0 because it come from the original data from input.
+```{r}
+M0 <- lm(wt ~ 1, data = births_clean)
+Mmax <- lm(wt ~ (. -marital)^2 + marital + I(gestation^2) + I(mage^2)+I(mht^2)+I(mwt^2)+I(fht^2)+I(fwt^2), data = births_clean)
+Mstart <- lm(wt ~ ., data = births_clean)
+```
+
+
+### Forward Model Selection
+```{r}
+system.time({
+  Mfwd <- step(object = M0, # starting point model
+               scope = list(lower = M0, upper = Mmax), # smallest and largest model
+               direction = "forward", trace = FALSE) # trace prints out information
+})
+Mfwd
+```
+
+
+### Backward Model Selection
+```{r}
+system.time({
+  Mback <- step(object = Mmax, # starting point model
+                scope = list(lower = M0, upper = Mmax),
+                direction = "backward", trace = FALSE)
+})
+Mback
+```
+
+
+### Stepwise Model Selection
+```{r}
+system.time({
+  Mstep <- step(object = Mstart,
+                scope = list(lower = M0, upper = Mmax),
+                direction = "both", trace = FALSE)
+})
+```
+
+```{r}
+c(fwd = length(coef(Mfwd)), back = length(coef(Mback)), step = length(coef(Mstep)))
+```
+
+
+
+```{r}
+# models to compare
+M1 <- Mfwd
+M2 <- Mstep
+```
+
+```{r,echo=FALSE}
+summary(Mfwd)
+summary(Mback)
+summary(Mstep)
+```
+
+### PRESS, $R^2$ and AIC
+
+```{r,echo=FALSE}
+#Press Statistic
+calPress <- function(M){
+  #X <- model.matrix(M)
+  #H <- X %*% solve(crossprod(X), t(X))
+  #press <- resid(M)/(1-diag(H))
+  press <- resid(M)/(1-hatvalues(M))
+  press <- sum(press^2)
+  return(press)
+}
+
+press1 <- calPress(Mfwd);
+press2 <- calPress(Mback);
+press3 <- calPress(Mstep);
+
+presses <- c(press1,press2,press3)
+
+# AIC Statistic for M1
+AIC1 <- AIC(Mfwd)
+
+#AIC Statistic for M2
+AIC2 <- AIC(Mback)
+
+AIC3 <- AIC(Mstep)
+
+AICS <- c(AIC1,AIC2,AIC3)
+
+
+```
+
+
+```{r}
+r.squared <- c(summary(Mfwd)$r.squared,summary(Mback)$r.square,summary(Mstep)$r.square)
+info <- c(r.squared,AICS,presses)
+info <- matrix(t(info),nrow = 3,ncol = 3)
+rownames(info)<-c("MFwd","MBack","MStep")
+colnames(info)<-c("R^2","AIC","Press")
+info  
+
+```
+
+## Conclusion
+
+# Model Diagnostics
+
+## Linear Model Assumptions
+
+```{r,echo=FALSE}
+
+# function for drawing studendized residual plots
+StuResPlot <- function(M) {
+  cex <- .8
+  res <- residuals(M)
+  h <- hatvalues(M)  # Hat matrix
+  sigma.hat <- sigma(M)
+  res.stu <- resid(M)/sqrt(1-h) # studentized residuals, but on the data scale
+  y.hat <- predict(M)
+  par(mar = c(4,4,.1,.1))
+  plot(y.hat, res, pch = 21, bg = "black", cex = cex, cex.axis = cex,
+        xlab = "Predicted Birth Weight",
+        ylab = "Residual Birth Weight",
+        abline(h = mean(res), col = "blue"))
+  points(y.hat, res.stu, pch = 21, bg = "red", cex = cex)
+  legend(x = "bottomleft", c("Residuals", "Studentized Residuals"),
+        pch = 21, pt.bg = c("black", "red"), pt.cex = cex, cex = cex)
+}
+
+# function for drawing standardized residual plots
+StaResPlot <- function(M) {
+  cex <- .8
+  res <- residuals(M) # Hat matrix
+  h <- hatvalues(M)
+  sigma.hat <- sigma(M)
+  par(mar = c(4,4,.1,.1))
+  hist(res/sigma.hat, breaks = 50, freq = FALSE, cex.axis = cex,
+  xlab = "Standardized Residual", main = "")
+  curve(dnorm(x), col = "red", add = TRUE)
+  abline(v = mean(res/sigma.hat), col = "green")
+}
+
+#function for drawing QQ plots
+QQPlot <- function(M) {
+  res <- residuals(M)
+  h <- hatvalues(M)
+  qqnorm(res/sigma(M))
+  abline(a=0, b=1, col = "red") #add 45 degree line
+  # head(res.stu1)
+}
+
+
+# studendized residual for forward selection model:
+StuResPlot(Mfwd)
+
+# studendized residual for backward elimination model:
+StuResPlot(Mback)
+
+# studentdized residual for stepwise selection model:
+StuResPlot(Mstep)
+
+# standardized residual for forward selection model:
+StaResPlot(Mfwd)
+
+# standardized residual for backward elimination model:
+StaResPlot(Mback)
+
+# standardized residual for stepwise selection model:
+StaResPlot(Mstep)
+
+# QQ-plot for forward selection model:
+QQPlot(Mfwd)
+
+# QQ-plot for backward selection model:
+QQPlot(Mback)
+
+# QQ-plot for stepwise selection model:
+QQPlot(Mstep)
+```
